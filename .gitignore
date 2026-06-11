@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Entorno
+.env
+.venv/
+
+# Conda
+# (el env vive fuera del repo, pero por si acaso)
+
+# IDE
+.idea/
+.vscode/
+
+# Docker
+# (los volúmenes viven en Docker, no en el repo)
