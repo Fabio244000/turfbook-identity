@@ -30,7 +30,11 @@ max-statements = 15
 [tool.ruff.format]
 quote-style = "single"
 indent-style = "space"
+
 [tool.mypy]
 python_version = "3.12"
 strict = true
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "--ignore=alembic"
