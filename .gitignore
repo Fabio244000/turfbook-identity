@@ -19,3 +19,6 @@ __pycache__/
 
 # Docker
 # (los volúmenes viven en Docker, no en el repo)
+
+# Cluade
+CLAUDE.md
