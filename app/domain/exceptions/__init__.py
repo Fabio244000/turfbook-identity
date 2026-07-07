@@ -5,6 +5,7 @@ from app.domain.exceptions.user_exceptions import (
     InvalidPasswordError,
     InvalidUsernameError,
     MissingRequiredFieldsError,
+    UserAlreadyExistsError,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     'InvalidPasswordError',
     'InvalidUsernameError',
     'MissingRequiredFieldsError',
+    'UserAlreadyExistsError',
 ]

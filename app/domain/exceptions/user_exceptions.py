@@ -20,3 +20,7 @@ class InvalidNameError(Exception):
 
 class MissingRequiredFieldsError(Exception):
     pass
+
+
+class UserAlreadyExistsError(Exception):
+    pass
