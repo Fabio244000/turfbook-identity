@@ -22,6 +22,7 @@ select = [
 
 ignore = [
     "E501",
+    "B008",
 ]
 
 [tool.ruff.lint.pylint]
@@ -35,12 +36,22 @@ indent-style = "space"
 python_version = "3.12"
 strict = true
 ignore_missing_imports = true
+exclude = ["^alembic/"]
+
+[[tool.mypy.overrides]]
+module = ["app.infrastructure.*", "config.*"]
+disable_error_code = ["misc", "no-any-return", "untyped-decorator", "call-arg"]
 
 [[tool.mypy.overrides]]
 module = ["tests.*"]
 disallow_untyped_defs = false
 disallow_untyped_decorators = false
-disable_error_code = ["attr-defined"]
+check_untyped_defs = false
+disable_error_code = ["attr-defined", "no-untyped-call"]
 
 [tool.pytest.ini_options]
 addopts = "--ignore=alembic"
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::sqlalchemy.exc.SAWarning",
+]

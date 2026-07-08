@@ -1,26 +1,30 @@
-class InvalidUsernameError(Exception):
+class DomainError(Exception):
     pass
 
 
-class InvalidPasswordError(Exception):
+class InvalidUsernameError(DomainError):
     pass
 
 
-class InvalidCellphoneError(Exception):
+class InvalidPasswordError(DomainError):
     pass
 
 
-class InvalidEmailError(Exception):
+class InvalidCellphoneError(DomainError):
     pass
 
 
-class InvalidNameError(Exception):
+class InvalidEmailError(DomainError):
     pass
 
 
-class MissingRequiredFieldsError(Exception):
+class InvalidNameError(DomainError):
     pass
 
 
-class UserAlreadyExistsError(Exception):
+class MissingRequiredFieldsError(DomainError):
+    pass
+
+
+class UserAlreadyExistsError(DomainError):
     pass

@@ -76,7 +76,25 @@ class User:
         if not NAME_PATTERN.match(value):
             raise InvalidNameError(f'{field_name} is invalid.')
 
+    def _validate_has_identifier(
+        self,
+        username: str | None = None,
+        password: str | None = None,
+        facebook_token: str | None = None,
+        gmail_token: str | None = None,
+    ) -> None:
+        if (not facebook_token and not gmail_token) and not (username and password):
+            raise MissingRequiredFieldsError(
+                'must provide username and password, or a social token'
+            )
+
     def __post_init__(self) -> None:
+        self._validate_has_identifier(
+            username=self.username,
+            password=self.password,
+            facebook_token=self.facebook_token,
+            gmail_token=self.gmail_token,
+        )
         self._validate_required_field('first_name', self.first_name)
         self._validate_required_field('last_name', self.last_name)
         self._validate_required_field('cellphone', self.cellphone)

@@ -12,7 +12,7 @@ from app.domain.ports.output.user_repository_port import UserRepositoryPort
 
 
 def _valid_input(**overrides: Any) -> dict[str, Any]:
-    data = {
+    data: dict[str, Any] = {
         'first_name': 'fabio',
         'last_name': 'nunez garcia',
         'cellphone': '+51 987654321',
@@ -58,77 +58,79 @@ def use_case(
 
 
 class TestRegisterUserSuccess:
-    def test_returns_user_and_token(self, use_case: RegisterUserUseCase) -> None:
-        user, token = use_case.execute(**_valid_input())
+    async def test_returns_user_and_token(self, use_case: RegisterUserUseCase) -> None:
+        user, token = await use_case.execute(**_valid_input())
         assert isinstance(user, User)
         assert token == 'session_token'
 
-    def test_password_is_hashed_not_plain(
+    async def test_password_is_hashed_not_plain(
         self, use_case: RegisterUserUseCase, hasher: PasswordHasherPort
     ) -> None:
-        user, _ = use_case.execute(**_valid_input())
+        user, _ = await use_case.execute(**_valid_input())
         hasher.hash.assert_called_once_with('secret1234')
         assert user.password == 'hashed'
 
-    def test_user_is_persisted(
+    async def test_user_is_persisted(
         self, use_case: RegisterUserUseCase, repository: UserRepositoryPort
     ) -> None:
-        use_case.execute(**_valid_input())
+        await use_case.execute(**_valid_input())
         repository.save.assert_called_once()
 
-    def test_token_is_issued(
+    async def test_token_is_issued(
         self, use_case: RegisterUserUseCase, token_issuer: TokenIssuerPort
     ) -> None:
-        use_case.execute(**_valid_input())
+        await use_case.execute(**_valid_input())
         token_issuer.issue.assert_called_once()
 
 
 class TestRegisterUserUniqueness:
-    def test_duplicate_username_raises(
+    async def test_duplicate_username_raises(
         self, use_case: RegisterUserUseCase, repository: UserRepositoryPort
     ) -> None:
         repository.exists_by_username.return_value = True
         with pytest.raises(UserAlreadyExistsError):
-            use_case.execute(**_valid_input())
+            await use_case.execute(**_valid_input())
 
-    def test_duplicate_email_raises(
+    async def test_duplicate_email_raises(
         self, use_case: RegisterUserUseCase, repository: UserRepositoryPort
     ) -> None:
         repository.exists_by_email.return_value = True
         with pytest.raises(UserAlreadyExistsError):
-            use_case.execute(**_valid_input())
+            await use_case.execute(**_valid_input())
 
-    def test_duplicate_cellphone_raises(
+    async def test_duplicate_cellphone_raises(
         self, use_case: RegisterUserUseCase, repository: UserRepositoryPort
     ) -> None:
         repository.exists_by_cellphone.return_value = True
         with pytest.raises(UserAlreadyExistsError):
-            use_case.execute(**_valid_input())
+            await use_case.execute(**_valid_input())
 
-    def test_does_not_persist_when_duplicate(
+    async def test_does_not_persist_when_duplicate(
         self, use_case: RegisterUserUseCase, repository: UserRepositoryPort
     ) -> None:
         repository.exists_by_username.return_value = True
         with pytest.raises(UserAlreadyExistsError):
-            use_case.execute(**_valid_input())
+            await use_case.execute(**_valid_input())
         repository.save.assert_not_called()
 
 
 class TestRegisterUserOptionalFields:
-    def test_registers_without_username(
+    async def test_registers_without_username(
         self, use_case: RegisterUserUseCase, repository: UserRepositoryPort
     ) -> None:
-        user, token = use_case.execute(**_valid_input(username=None, password=None))
+        user, token = await use_case.execute(
+            **_valid_input(username=None, password=None)
+        )
         assert user.username is None
 
-    def test_skips_username_uniqueness_when_absent(
+    async def test_skips_username_uniqueness_when_absent(
         self, use_case: RegisterUserUseCase, repository: UserRepositoryPort
     ) -> None:
-        use_case.execute(**_valid_input(username=None, password=None))
+        await use_case.execute(**_valid_input(username=None, password=None))
         repository.exists_by_username.assert_not_called()
 
-    def test_skips_email_uniqueness_when_absent(
+    async def test_skips_email_uniqueness_when_absent(
         self, use_case: RegisterUserUseCase, repository: UserRepositoryPort
     ) -> None:
-        use_case.execute(**_valid_input(email=None))
+        await use_case.execute(**_valid_input(email=None))
         repository.exists_by_email.assert_not_called()
