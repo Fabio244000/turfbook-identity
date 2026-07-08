@@ -44,7 +44,7 @@ class TestUserUsername:
             User(**kwargs)
 
     def test_empty_username_is_invalid(self) -> None:
-        kwargs = _valid_user_kwargs(username='')
+        kwargs = _valid_user_kwargs(username='', facebook_token='fb_token_123')
         with pytest.raises(InvalidUsernameError):
             User(**kwargs)
 
@@ -163,11 +163,18 @@ class TestUserRequiredFields:
 
 
 class TestUserOptionalFields:
-    def test_user_without_username_and_password_is_valid(self) -> None:
-        kwargs = _valid_user_kwargs(username=None, password=None)
+    def test_user_with_social_token_without_credentials_is_valid(self) -> None:
+        kwargs = _valid_user_kwargs(
+            username=None, password=None, facebook_token='fb_token_123'
+        )
         user = User(**kwargs)
         assert user.username is None
         assert user.password is None
+
+    def test_user_without_credentials_and_social_token_is_invalid(self) -> None:
+        kwargs = _valid_user_kwargs(username=None, password=None)
+        with pytest.raises(MissingRequiredFieldsError):
+            User(**kwargs)
 
     def test_user_without_email_is_valid(self) -> None:
         kwargs = _valid_user_kwargs(email=None)

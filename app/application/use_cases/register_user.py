@@ -24,6 +24,8 @@ class RegisterUserUseCase:
         username: str | None = None,
         password: str | None = None,
         email: str | None = None,
+        facebook_token: str | None = None,
+        gmail_token: str | None = None,
     ) -> tuple[User, str]:
         await self._verify_already_exists_user_with_unique_fields(
             username=username, cellphone=cellphone, email=email
@@ -35,6 +37,8 @@ class RegisterUserUseCase:
             username=username,
             password=password,
             email=email,
+            facebook_token=facebook_token,
+            gmail_token=gmail_token,
         )
 
         if user.password:

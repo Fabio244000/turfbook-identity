@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = 'HS256'
     access_token_expire_minutes: int = 15
     database_url: str
+    test_database_url: str | None = None
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
 

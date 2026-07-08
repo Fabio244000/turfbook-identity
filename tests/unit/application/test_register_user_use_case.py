@@ -115,18 +115,20 @@ class TestRegisterUserUniqueness:
 
 
 class TestRegisterUserOptionalFields:
-    async def test_registers_without_username(
+    async def test_registers_with_social_token_without_credentials(
         self, use_case: RegisterUserUseCase, repository: UserRepositoryPort
     ) -> None:
         user, token = await use_case.execute(
-            **_valid_input(username=None, password=None)
+            **_valid_input(username=None, password=None, facebook_token='fb_token_123')
         )
         assert user.username is None
 
     async def test_skips_username_uniqueness_when_absent(
         self, use_case: RegisterUserUseCase, repository: UserRepositoryPort
     ) -> None:
-        await use_case.execute(**_valid_input(username=None, password=None))
+        await use_case.execute(
+            **_valid_input(username=None, password=None, facebook_token='fb_token_123')
+        )
         repository.exists_by_username.assert_not_called()
 
     async def test_skips_email_uniqueness_when_absent(
