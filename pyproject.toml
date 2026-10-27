@@ -39,7 +39,7 @@ ignore_missing_imports = true
 exclude = ["^alembic/"]
 
 [[tool.mypy.overrides]]
-module = ["app.infrastructure.*", "config.*"]
+module = ["app.user_identity.infrastructure.*", "config.*"]
 disable_error_code = ["misc", "no-any-return", "untyped-decorator", "call-arg"]
 
 [[tool.mypy.overrides]]
