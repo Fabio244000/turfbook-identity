@@ -22,3 +22,11 @@ __pycache__/
 
 # Cluade
 CLAUDE.md
+
+# Documentos de trabajo locales
+despliegue-aws-checklist.md
+refactor-uow-checklist.md
+
+# Node / Serverless
+node_modules/
+.serverless/

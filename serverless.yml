@@ -1,0 +1,65 @@
+service: turfbook-identity
+frameworkVersion: '~4.43.0'
+
+stages:
+  default:
+    params:
+      privateSubnetA: subnet-0163ffcf34770d937
+      privateSubnetB: subnet-0f44784a3de31da43
+      lambdaDbSecurityGroup: sg-094dae12950b8a2e9
+
+provider:
+  name: aws
+  runtime: python3.12
+  architecture: arm64
+  region: us-east-1
+  logRetentionInDays: 7
+  stackTags:
+    project: turfbook
+    service: turfbook-identity
+    stage: ${sls:stage}
+  httpApi:
+    payload: '2.0'
+  vpc:
+    subnetIds:
+      - ${param:privateSubnetA}
+      - ${param:privateSubnetB}
+    securityGroupIds:
+      - ${param:lambdaDbSecurityGroup}
+  iam:
+    role:
+      mode: perFunction
+      permissionsBoundary: arn:aws:iam::${aws:accountId}:policy/turfbook-lambda-boundary
+  environment: ${file(./deploy/env/${sls:stage}.yml)}
+
+custom:
+  pythonRequirements:
+    fileName: requirements/base.txt
+    layer: true
+    dockerizePip: true
+
+package:
+  patterns:
+    - '!./**'
+    - 'app/**'
+    - 'config/**'
+    - 'alembic/**'
+    - 'alembic.ini'
+
+functions:
+  api:
+    handler: app.user_identity.main.handler
+    layers:
+      - Ref: PythonRequirementsLambdaLayer
+    events:
+      - httpApi: '*'
+    timeout: 29
+
+  migrate:
+    handler: app.migrations.handler.handler
+    layers:
+      - Ref: PythonRequirementsLambdaLayer
+    timeout: 30
+    maximumRetryAttempts: 0
+
+resources: ${file(./deploy/resources/migrations.yml)}
