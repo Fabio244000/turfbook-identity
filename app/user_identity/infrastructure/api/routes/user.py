@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, status
 
-from app.user_identity.application.use_cases.register_user import RegisterUserUseCase
+from app.user_identity.domain.ports.input.register_user_port import RegisterUserPort
 from app.user_identity.infrastructure.api.dependencies import get_register_user_use_case
 from app.user_identity.infrastructure.api.schemas.api_response import ApiResponse
 from app.user_identity.infrastructure.api.schemas.user_schema import (
@@ -19,7 +19,7 @@ router = APIRouter()
 )
 async def register_user(
     request: UserRequest,
-    use_case: RegisterUserUseCase = Depends(get_register_user_use_case),
+    use_case: RegisterUserPort = Depends(get_register_user_use_case),
 ) -> ApiResponse[RegisterUserData]:
     user, token = await use_case.execute(
         first_name=request.first_name,

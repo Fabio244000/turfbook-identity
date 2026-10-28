@@ -1,9 +1,7 @@
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.user_identity.domain.entities.user import User
-from app.user_identity.domain.exceptions.user_exceptions import UserAlreadyExistsError
 from app.user_identity.domain.ports.output.user_repository_port import (
     UserRepositoryPort,
 )
@@ -14,17 +12,8 @@ class UserRepository(UserRepositoryPort):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def save(self, user: User) -> User:
-        model = self._to_model(user)
-        self._session.add(model)
-        try:
-            await self._session.commit()
-        except IntegrityError as error:
-            await self._session.rollback()
-            raise UserAlreadyExistsError(
-                'A user already exist with unique fields.'
-            ) from error
-        return user
+    async def add(self, user: User) -> None:
+        self._session.add(self._to_model(user))
 
     async def exists_by_username(self, username: str) -> bool:
         query = select(UserModel).where(UserModel.username == username)

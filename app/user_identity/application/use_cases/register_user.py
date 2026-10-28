@@ -1,22 +1,21 @@
 from app.user_identity.domain.entities.user import User
 from app.user_identity.domain.exceptions import UserAlreadyExistsError
+from app.user_identity.domain.ports.input.register_user_port import RegisterUserPort
 from app.user_identity.domain.ports.output.password_hasher_port import (
     PasswordHasherPort,
 )
 from app.user_identity.domain.ports.output.token_issuer_port import TokenIssuerPort
-from app.user_identity.domain.ports.output.user_repository_port import (
-    UserRepositoryPort,
-)
+from app.user_identity.domain.ports.output.unit_of_work_port import UnitOfWorkPort
 
 
-class RegisterUserUseCase:
+class RegisterUserUseCase(RegisterUserPort):
     def __init__(
         self,
-        user_repository: UserRepositoryPort,
+        uow: UnitOfWorkPort,
         hasher: PasswordHasherPort,
         token_issuer: TokenIssuerPort,
     ) -> None:
-        self._user_repository = user_repository
+        self._uow = uow
         self._hasher = hasher
         self._token_issuer = token_issuer
 
@@ -31,9 +30,6 @@ class RegisterUserUseCase:
         facebook_token: str | None = None,
         gmail_token: str | None = None,
     ) -> tuple[User, str]:
-        await self._verify_already_exists_user_with_unique_fields(
-            username=username, cellphone=cellphone, email=email
-        )
         user = User(
             first_name=first_name,
             last_name=last_name,
@@ -44,26 +40,23 @@ class RegisterUserUseCase:
             facebook_token=facebook_token,
             gmail_token=gmail_token,
         )
+        async with self._uow:
+            await self._ensure_unique(user)
+            if user.password:
+                user.password = self._hasher.hash(user.password)
+            await self._uow.users.add(user)
+            await self._uow.commit()
+        return user, self._token_issuer.issue(user.uuid)
 
-        if user.password:
-            user.password = self._hasher.hash(user.password)
-        await self._user_repository.save(user)
-        sesion_token = self._token_issuer.issue(user.uuid)
-
-        return user, sesion_token
-
-    async def _verify_already_exists_user_with_unique_fields(
-        self, cellphone: str, username: str | None = None, email: str | None = None
-    ) -> None:
-        if username and await self._user_repository.exists_by_username(username):
+    async def _ensure_unique(self, user: User) -> None:
+        users = self._uow.users
+        if user.username and await users.exists_by_username(user.username):
             raise UserAlreadyExistsError(
-                f'User with username {username} already exists.'
+                f'User with username {user.username} already exists.'
             )
-
-        if await self._user_repository.exists_by_cellphone(cellphone):
+        if await users.exists_by_cellphone(user.cellphone):
             raise UserAlreadyExistsError(
-                f'User with cellphone {cellphone} already exists.'
+                f'User with cellphone {user.cellphone} already exists.'
             )
-
-        if email and await self._user_repository.exists_by_email(email):
-            raise UserAlreadyExistsError(f'User with email {email} already exists.')
+        if user.email and await users.exists_by_email(user.email):
+            raise UserAlreadyExistsError(f'User with email {user.email} already exists')

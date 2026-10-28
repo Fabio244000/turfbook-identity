@@ -6,7 +6,6 @@ class Settings(BaseSettings):
     jwt_algorithm: str = 'HS256'
     access_token_expire_minutes: int = 15
     database_url: str
-    test_database_url: str | None = None
     # A Lambda execution environment serves one request at a time, so one connection
     # is enough; it also caps connections to the shared RDS at one per environment.
     db_pool_size: int = 1
