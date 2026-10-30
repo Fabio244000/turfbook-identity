@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from mangum import Mangum
 
-from app.user_identity.domain.exceptions.user_exceptions import DomainError
+from app.user_identity.domain.exceptions import DomainError
 from app.user_identity.infrastructure.api.exception_handlers import (
     domain_exception_handler,
 )

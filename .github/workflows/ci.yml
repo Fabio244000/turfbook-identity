@@ -35,7 +35,6 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql+psycopg://turfbook:turfbook@localhost:5432/identity
-      JWT_SECRET_KEY: ci-only-not-a-real-secret
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -55,6 +54,12 @@ jobs:
 
       - name: Pre-commit hooks
         run: pre-commit run --all-files --show-diff-on-failure
+
+      # A throwaway key pair for this run only: Settings requires a signing key.
+      - name: Session token key (CI only)
+        run: |
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$RUNNER_TEMP/jwt.pem"
+          { echo 'JWT_PRIVATE_KEY<<EOF'; cat "$RUNNER_TEMP/jwt.pem"; echo 'EOF'; } >> "$GITHUB_ENV"
 
       - name: Migrations
         run: alembic upgrade head

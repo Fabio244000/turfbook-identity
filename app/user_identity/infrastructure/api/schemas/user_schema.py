@@ -3,6 +3,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+from app.user_identity.infrastructure.api.schemas.token_schema import (
+    SessionTokensData,
+)
+
 
 class BaseUserSchema(BaseModel):
     first_name: str
@@ -26,10 +30,7 @@ class UserResponse(BaseUserSchema):
     updated_at: datetime
 
 
-class RegisterUserData(BaseModel):
-    """Datos de usuario"""
+class RegisterUserData(SessionTokensData):
+    """The registered user and the session it starts."""
 
     user: UserResponse
-    token: str
-
-    model_config = ConfigDict(from_attributes=True)

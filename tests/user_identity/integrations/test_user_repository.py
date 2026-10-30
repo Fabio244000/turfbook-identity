@@ -51,3 +51,19 @@ class TestUserRepository:
         exists = await repository.exists_by_username(new_user().username)
 
         assert exists is False
+
+    async def test_finds_an_existing_user_by_uuid(self, session, new_user, insert_user):
+        user = new_user()
+        await insert_user(user)
+        repository = UserRepository(session)
+
+        exists = await repository.exists_by_uuid(user.uuid)
+
+        assert exists is True
+
+    async def test_does_not_find_a_uuid_nobody_has(self, session, new_user):
+        repository = UserRepository(session)
+
+        exists = await repository.exists_by_uuid(new_user().uuid)
+
+        assert exists is False

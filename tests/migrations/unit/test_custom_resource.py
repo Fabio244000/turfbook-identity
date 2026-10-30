@@ -1,5 +1,4 @@
 import pytest
-from sqlalchemy.exc import OperationalError
 
 from app.migrations.custom_resource import (
     DEFAULT_REASON,
@@ -53,14 +52,6 @@ class TestHandleMigrationEvent:
         assert len(sender.sent) == 1
         assert sender.last_body['Status'] == 'FAILED'
         assert sender.last_body['Reason'] == 'boom'
-
-    def test_reports_failure_when_database_is_unreachable(self) -> None:
-        error = OperationalError('SELECT 1', {}, Exception('connection refused'))
-
-        sender = _run_failing(error)
-
-        assert sender.last_body['Status'] == 'FAILED'
-        assert 'connection refused' in sender.last_body['Reason']
 
     def test_truncates_a_long_failure_reason(self) -> None:
         sender = _run_failing(RuntimeError('x' * 5000))

@@ -1,6 +1,5 @@
-JWT_ALGORITHM: ${ssm:/turfbook/identity/dev/jwt_algorithm}
 ACCESS_TOKEN_EXPIRE_MINUTES: ${ssm:/turfbook/identity/dev/access_token_expire_minutes}
-JWT_SECRET_KEY: '{{resolve:secretsmanager:turfbook/identity/dev/jwt-secret-key}}'
+JWT_PRIVATE_KEY: '{{resolve:secretsmanager:turfbook/identity/dev/jwt-private-key}}'
 DATABASE_URL:
   Fn::Sub:
     - 'postgresql+psycopg://${DbUser}:${DbPassword}@${DbHost}:${DbPort}/${DbName}'
