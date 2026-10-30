@@ -2,9 +2,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    jwt_secret_key: str
-    jwt_algorithm: str = 'HS256'
+    # PEM (PKCS#8) of the RSA key that signs the session token.
+    jwt_private_key: str
     access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 7
+    refresh_token_bytes: int = 32
     database_url: str
     # A Lambda execution environment serves one request at a time, so one connection
     # is enough; it also caps connections to the shared RDS at one per environment.

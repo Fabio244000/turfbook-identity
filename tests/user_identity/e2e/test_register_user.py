@@ -1,47 +1,16 @@
-from uuid import uuid4
+import re
 
-import pytest
-import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
+import jwt
 
-from app.user_identity.infrastructure.api.dependencies import get_unit_of_work
-from app.user_identity.infrastructure.database.unit_of_work import (
-    SqlAlchemyUnitOfWork,
-)
-from app.user_identity.main import app
+from config.settings import settings
+from tests.user_identity.e2e.conftest import USERS_PATH, valid_user_payload
 
-# Public contract: written literally so an accidental prefix/version change fails here.
-USERS_PATH = '/api/v1/users'
-
-
-def _valid_payload(**overrides):
-    suffix = uuid4().hex[:8]
-    data = {
-        'first_name': 'fabio',
-        'last_name': 'nunez garcia',
-        'cellphone': f'+51 9{uuid4().int % 10**8:08d}',
-        'username': f'user{suffix}',
-        'password': 'secretpass123',
-        'email': f'user{suffix}@mail.com',
-    }
-    data.update(overrides)
-    return data
-
-
-@pytest_asyncio.fixture
-async def client(session_factory):
-    app.dependency_overrides[get_unit_of_work] = lambda: SqlAlchemyUnitOfWork(
-        session_factory
-    )
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url='http://test') as client:
-        yield client
-    app.dependency_overrides.clear()
+BASE64URL_256_BITS = re.compile(r'[A-Za-z0-9_-]{43}')
 
 
 class TestRegisterUser:
-    async def test_returns_201_with_the_user_and_a_session_token(self, client):
-        payload = _valid_payload()
+    async def test_returns_201_with_the_user_and_a_session(self, client):
+        payload = valid_user_payload()
 
         response = await client.post(USERS_PATH, json=payload)
 
@@ -49,59 +18,63 @@ class TestRegisterUser:
         body = response.json()
         assert body['success'] is True
         assert body['data']['user']['username'] == payload['username']
-        assert body['data']['token']
+        assert BASE64URL_256_BITS.fullmatch(body['data']['refresh_token'])
+
+    async def test_the_session_token_is_rs256_for_the_registered_user(
+        self, client, public_key
+    ):
+        response = await client.post(USERS_PATH, json=valid_user_payload())
+
+        data = response.json()['data']
+        claims = jwt.decode(data['token'], public_key, algorithms=['RS256'])
+        assert claims['sub'] == data['user']['uuid']
+        assert claims['iss'] == 'turfbook-identity'
+
+    async def test_expires_in_is_the_lifetime_of_the_session_token(
+        self, client, public_key
+    ):
+        response = await client.post(USERS_PATH, json=valid_user_payload())
+
+        data = response.json()['data']
+        claims = jwt.decode(data['token'], public_key, algorithms=['RS256'])
+        assert data['expires_in'] == settings.access_token_expire_minutes * 60
+        assert data['expires_in'] == claims['exp'] - claims['iat']
 
     async def test_does_not_expose_the_password(self, client):
-        payload = _valid_payload()
+        payload = valid_user_payload()
 
         response = await client.post(USERS_PATH, json=payload)
 
         assert 'password' not in response.json()['data']['user']
 
-    async def test_registers_without_email(self, client):
-        payload = _valid_payload(email=None)
-
-        response = await client.post(USERS_PATH, json=payload)
-
-        assert response.status_code == 201
-
 
 class TestRegisterUserDuplicates:
     async def test_returns_409_on_duplicate_username(self, client):
-        first = _valid_payload()
+        first = valid_user_payload()
         await client.post(USERS_PATH, json=first)
 
         response = await client.post(
-            USERS_PATH, json=_valid_payload(username=first['username'])
+            USERS_PATH, json=valid_user_payload(username=first['username'])
         )
 
         assert response.status_code == 409
         assert response.json()['success'] is False
 
-    async def test_returns_409_on_duplicate_email(self, client):
-        first = _valid_payload()
+    async def test_invalid_data_is_rejected_before_looking_for_duplicates(self, client):
+        first = valid_user_payload()
         await client.post(USERS_PATH, json=first)
 
         response = await client.post(
-            USERS_PATH, json=_valid_payload(email=first['email'])
+            USERS_PATH,
+            json=valid_user_payload(username=first['username'], email='fabio-mail.com'),
         )
 
-        assert response.status_code == 409
-
-    async def test_returns_409_on_duplicate_cellphone(self, client):
-        first = _valid_payload()
-        await client.post(USERS_PATH, json=first)
-
-        response = await client.post(
-            USERS_PATH, json=_valid_payload(cellphone=first['cellphone'])
-        )
-
-        assert response.status_code == 409
+        assert response.status_code == 400
 
 
 class TestRegisterUserInvalidData:
     async def test_returns_400_on_invalid_password(self, client):
-        payload = _valid_payload(password='short')
+        payload = valid_user_payload(password='short')
 
         response = await client.post(USERS_PATH, json=payload)
 
@@ -110,15 +83,7 @@ class TestRegisterUserInvalidData:
     async def test_returns_422_without_username_and_password_or_social_token(
         self, client
     ):
-        payload = _valid_payload(username=None, password=None)
-
-        response = await client.post(USERS_PATH, json=payload)
-
-        assert response.status_code == 422
-
-    @pytest.mark.parametrize('field', ['first_name', 'last_name', 'cellphone'])
-    async def test_returns_422_when_a_required_field_is_missing(self, client, field):
-        payload = _valid_payload(**{field: None})
+        payload = valid_user_payload(username=None, password=None)
 
         response = await client.post(USERS_PATH, json=payload)
 

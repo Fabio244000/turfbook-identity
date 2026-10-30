@@ -1,5 +1,4 @@
-class DomainError(Exception):
-    pass
+from app.user_identity.domain.exceptions.domain_error import DomainError
 
 
 class InvalidUsernameError(DomainError):
