@@ -3,8 +3,13 @@ from typing import Self
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.user_identity.domain.exceptions import UserAlreadyExistsError
 from app.user_identity.domain.ports.output.unit_of_work_port import UnitOfWorkPort
+from app.user_identity.infrastructure.database.constraint_errors import (
+    to_domain_error,
+)
+from app.user_identity.infrastructure.database.repositories.refresh_token_repository import (
+    RefreshTokenRepository,
+)
 from app.user_identity.infrastructure.database.repositories.user_repository import (
     UserRepository,
 )
@@ -17,6 +22,7 @@ class SqlAlchemyUnitOfWork(UnitOfWorkPort):
     async def __aenter__(self) -> Self:
         self._session = self._session_factory()
         self.users = UserRepository(self._session)
+        self.refresh_tokens = RefreshTokenRepository(self._session)
         return await super().__aenter__()
 
     async def __aexit__(self, *args: object) -> None:
@@ -27,9 +33,10 @@ class SqlAlchemyUnitOfWork(UnitOfWorkPort):
         try:
             await self._session.commit()
         except IntegrityError as error:
-            raise UserAlreadyExistsError(
-                'A user already exists with the same unique fields.'
-            ) from error
+            domain_error = to_domain_error(error)
+            if domain_error is None:
+                raise  # no business meaning: a bug, surfaces as a 500
+            raise domain_error from error
 
     async def rollback(self) -> None:
         await self._session.rollback()

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from uuid import UUID, uuid4
 
 from app.user_identity.domain.constants import (
@@ -29,10 +29,10 @@ class User:
     username: str | None
     password: str | None
     email: str | None
+    created_at: datetime
+    updated_at: datetime
     facebook_token: str | None = field(default=None)
     gmail_token: str | None = field(default=None)
-    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     uuid: UUID = field(default_factory=uuid4)
 
     def _validate_cellphone(self, cellphone: str) -> None:

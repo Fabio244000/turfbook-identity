@@ -30,3 +30,9 @@ refactor-uow-checklist.md
 # Node / Serverless
 node_modules/
 .serverless/
+
+# Tickets (local only)
+tickets/
+
+# Task lists (local only)
+docs/

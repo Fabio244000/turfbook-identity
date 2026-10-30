@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+from app.user_identity.domain.entities.session_tokens import SessionTokens
 from app.user_identity.domain.entities.user import User
 
 
@@ -15,4 +16,4 @@ class RegisterUserPort(ABC):
         email: str | None = None,
         facebook_token: str | None = None,
         gmail_token: str | None = None,
-    ) -> tuple[User, str]: ...
+    ) -> tuple[User, SessionTokens]: ...

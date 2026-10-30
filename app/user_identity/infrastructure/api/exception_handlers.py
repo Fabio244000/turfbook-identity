@@ -1,12 +1,13 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from app.user_identity.domain.exceptions.user_exceptions import (
+from app.user_identity.domain.exceptions import (
     DomainError,
     InvalidCellphoneError,
     InvalidEmailError,
     InvalidNameError,
     InvalidPasswordError,
+    InvalidRefreshTokenError,
     InvalidUsernameError,
     MissingRequiredFieldsError,
     UserAlreadyExistsError,
@@ -21,6 +22,7 @@ STATUS_MAP: dict[type[DomainError], int] = {
     InvalidNameError: 400,
     InvalidUsernameError: 400,
     InvalidPasswordError: 400,
+    InvalidRefreshTokenError: 401,
 }
 
 

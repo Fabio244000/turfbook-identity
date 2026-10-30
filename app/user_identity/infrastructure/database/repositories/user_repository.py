@@ -1,4 +1,6 @@
-from sqlalchemy import select
+from uuid import UUID
+
+from sqlalchemy import ColumnElement, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.user_identity.domain.entities.user import User
@@ -15,20 +17,21 @@ class UserRepository(UserRepositoryPort):
     async def add(self, user: User) -> None:
         self._session.add(self._to_model(user))
 
+    async def exists_by_uuid(self, user_uuid: UUID) -> bool:
+        return await self._exists(UserModel.uuid == user_uuid)
+
     async def exists_by_username(self, username: str) -> bool:
-        query = select(UserModel).where(UserModel.username == username)
-        data = await self._session.execute(query)
-        return data.scalar_one_or_none() is not None
+        return await self._exists(UserModel.username == username)
 
     async def exists_by_cellphone(self, cellphone: str) -> bool:
-        query = select(UserModel).where(UserModel.cellphone == cellphone)
-        data = await self._session.execute(query)
-        return data.scalar_one_or_none() is not None
+        return await self._exists(UserModel.cellphone == cellphone)
 
     async def exists_by_email(self, email: str) -> bool:
-        query = select(UserModel).where(UserModel.email == email)
-        data = await self._session.execute(query)
-        return data.scalar_one_or_none() is not None
+        return await self._exists(UserModel.email == email)
+
+    async def _exists(self, condition: ColumnElement[bool]) -> bool:
+        query = select(UserModel.uuid).where(condition)
+        return (await self._session.execute(query)).first() is not None
 
     def _to_model(self, user: User) -> UserModel:
         return UserModel(
