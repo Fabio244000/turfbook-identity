@@ -5,6 +5,6 @@ DATABASE_URL:
     - 'postgresql+psycopg://${DbUser}:${DbPassword}@${DbHost}:${DbPort}/${DbName}'
     - DbUser: '{{resolve:secretsmanager:turfbook/identity/dev/db:SecretString:username}}'
       DbPassword: '{{resolve:secretsmanager:turfbook/identity/dev/db:SecretString:password}}'
-      DbHost: '{{resolve:secretsmanager:turfbook/identity/dev/db:SecretString:host}}'
-      DbPort: '{{resolve:secretsmanager:turfbook/identity/dev/db:SecretString:port}}'
       DbName: '{{resolve:secretsmanager:turfbook/identity/dev/db:SecretString:dbname}}'
+      DbHost: ${ssm:/turfbook/dev/db_host}
+      DbPort: ${ssm:/turfbook/dev/db_port}
