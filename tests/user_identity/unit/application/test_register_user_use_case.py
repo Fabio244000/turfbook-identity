@@ -6,11 +6,9 @@ import pytest
 from app.user_identity.application.use_cases.register_user import RegisterUserUseCase
 from app.user_identity.domain.entities.user import User
 from app.user_identity.domain.exceptions import (
-    InvalidCellphoneError,
     InvalidEmailError,
-    InvalidNameError,
     InvalidPasswordError,
-    InvalidUsernameError,
+    InvalidUserError,
     MissingRequiredFieldsError,
     UserAlreadyExistsError,
 )
@@ -24,15 +22,16 @@ from tests.fakes.user_identity import (
 
 NOW = datetime(2026, 10, 29, 12, 0, tzinfo=UTC)
 REFRESH_TOKEN_TTL = timedelta(days=7)
+PASSWORD_LENGTH = 'Password must be between 15 and 64 characters.'
 
 
 def _valid_input(**overrides: Any) -> dict[str, Any]:
     data: dict[str, Any] = {
         'first_name': 'fabio',
         'last_name': 'nunez garcia',
-        'cellphone': '+51 987654321',
+        'cellphone': '+51987654321',
         'username': 'fabio01',
-        'password': 'secret1234',
+        'password': 'GrassElSol2026!',
         'email': 'fabio@mail.com',
     }
     data.update(overrides)
@@ -67,10 +66,10 @@ class TestRegisterUser:
         uow = FakeUnitOfWork()
 
         user, _ = await _register_user(uow).execute(
-            **_valid_input(password='secret1234')
+            **_valid_input(password='GrassElSol2026!')
         )
 
-        assert user.password == 'hashed-secret1234'
+        assert user.password == 'hashed-GrassElSol2026!'
 
     async def test_returns_an_access_token_for_the_registered_user(self) -> None:
         uow = FakeUnitOfWork()
@@ -116,7 +115,7 @@ class TestRegisterUserUniqueness:
                 _existing_user(
                     username='fabio01',
                     email='other@mail.com',
-                    cellphone='+51 911111111',
+                    cellphone='+51911111111',
                 )
             ]
         )
@@ -132,7 +131,7 @@ class TestRegisterUserUniqueness:
                 _existing_user(
                     username='other01',
                     email='fabio@mail.com',
-                    cellphone='+51 911111111',
+                    cellphone='+51911111111',
                 )
             ]
         )
@@ -142,19 +141,33 @@ class TestRegisterUserUniqueness:
 
         assert uow.committed is False
 
+    async def test_an_email_that_differs_only_in_case_is_a_duplicate(self) -> None:
+        uow = FakeUnitOfWork(
+            users=[
+                _existing_user(
+                    username='other01',
+                    email='fabio@mail.com',
+                    cellphone='+51911111111',
+                )
+            ]
+        )
+
+        with pytest.raises(UserAlreadyExistsError, match='email'):
+            await _register_user(uow).execute(**_valid_input(email='Fabio@Mail.com'))
+
     async def test_rejects_a_duplicate_cellphone_without_committing(self) -> None:
         uow = FakeUnitOfWork(
             users=[
                 _existing_user(
                     username='other01',
                     email='other@mail.com',
-                    cellphone='+51 987654321',
+                    cellphone='+51987654321',
                 )
             ]
         )
 
         with pytest.raises(UserAlreadyExistsError, match='cellphone'):
-            await _register_user(uow).execute(**_valid_input(cellphone='+51 987654321'))
+            await _register_user(uow).execute(**_valid_input(cellphone='+51987654321'))
 
         assert uow.committed is False
 
@@ -170,25 +183,21 @@ class TestRegisterUserWithSocialToken:
         assert uow.users.users == [user]
         assert user.password is None
 
-    async def test_absent_username_and_email_are_not_checked_for_uniqueness(
-        self,
-    ) -> None:
+    async def test_an_absent_username_is_not_checked_for_uniqueness(self) -> None:
         uow = FakeUnitOfWork(
             users=[
                 _existing_user(
                     username=None,
                     password=None,
-                    email=None,
+                    email='other@mail.com',
                     facebook_token='fb_111',
-                    cellphone='+51 911111111',
+                    cellphone='+51911111111',
                 )
             ]
         )
 
         user, _ = await _register_user(uow).execute(
-            **_valid_input(
-                username=None, password=None, email=None, facebook_token='fb_222'
-            )
+            **_valid_input(username=None, password=None, facebook_token='fb_222')
         )
 
         assert uow.users.users[-1] == user
@@ -217,12 +226,83 @@ class TestRegisterUserRequiredData:
         with pytest.raises(MissingRequiredFieldsError, match='must provide'):
             await _register_user(uow).execute(**_valid_input(password=None))
 
-    async def test_registers_without_email(self) -> None:
+    @pytest.mark.parametrize('email', [None, '   '], ids=['absent', 'blank'])
+    async def test_rejects_a_registration_without_email(
+        self, email: str | None
+    ) -> None:
         uow = FakeUnitOfWork()
 
-        user, _ = await _register_user(uow).execute(**_valid_input(email=None))
+        with pytest.raises(InvalidUserError, match='Email is required.'):
+            await _register_user(uow).execute(**_valid_input(email=email))
 
-        assert uow.users.users == [user]
+        assert uow.users.users == []
+
+
+class TestRegisterUserEmail:
+    async def test_stores_the_email_trimmed_and_in_lowercase(self) -> None:
+        uow = FakeUnitOfWork()
+
+        user, _ = await _register_user(uow).execute(
+            **_valid_input(email='  Luis.H@Gmail.com ')
+        )
+
+        assert user.email == 'luis.h@gmail.com'
+
+    @pytest.mark.parametrize(
+        'email',
+        ['fabio-mail.com', 'a@b.c', 'a' * 246 + '@mail.com'],
+        ids=['no_at', 'shorter_than_6', 'longer_than_254'],
+    )
+    async def test_rejects_an_invalid_email(self, email: str) -> None:
+        uow = FakeUnitOfWork()
+
+        with pytest.raises(InvalidUserError, match='Email is invalid.'):
+            await _register_user(uow).execute(**_valid_input(email=email))
+
+
+class TestRegisterUserPassword:
+    @pytest.mark.parametrize(
+        'password', ['a' * 14, 'a' * 65], ids=['shorter_than_15', 'longer_than_64']
+    )
+    async def test_rejects_a_password_out_of_range(self, password: str) -> None:
+        uow = FakeUnitOfWork()
+
+        with pytest.raises(InvalidUserError, match=PASSWORD_LENGTH):
+            await _register_user(uow).execute(**_valid_input(password=password))
+
+    @pytest.mark.parametrize(
+        'password',
+        ['a' * 15, 'a' * 64, 'GrassElSol2026!', 'mi clave de césped'],
+        ids=['15', '64', 'symbols', 'spaces_and_accents'],
+    )
+    async def test_accepts_any_character_within_range(self, password: str) -> None:
+        uow = FakeUnitOfWork()
+
+        user, _ = await _register_user(uow).execute(**_valid_input(password=password))
+
+        assert user.password == f'hashed-{password}'
+
+
+class TestRegisterUserCellphone:
+    @pytest.mark.parametrize(
+        'cellphone',
+        ['+51 987654321', '987654321', '+51abc654321', '+519876543210'],
+        ids=['with_space', 'without_prefix', 'with_letters', 'more_than_9_digits'],
+    )
+    async def test_rejects_a_cellphone_that_is_not_e164(self, cellphone: str) -> None:
+        uow = FakeUnitOfWork()
+
+        with pytest.raises(InvalidUserError, match='Cellphone is invalid.'):
+            await _register_user(uow).execute(**_valid_input(cellphone=cellphone))
+
+    async def test_stores_the_cellphone_trimmed(self) -> None:
+        uow = FakeUnitOfWork()
+
+        user, _ = await _register_user(uow).execute(
+            **_valid_input(cellphone=' +51987654321 ')
+        )
+
+        assert user.cellphone == '+51987654321'
 
 
 class TestRegisterUserUsername:
@@ -234,13 +314,13 @@ class TestRegisterUserUsername:
     ) -> None:
         uow = FakeUnitOfWork()
 
-        with pytest.raises(InvalidUsernameError, match='only contain'):
+        with pytest.raises(InvalidUserError, match='only contain'):
             await _register_user(uow).execute(**_valid_input(username=username))
 
     async def test_rejects_an_empty_username_even_with_a_social_token(self) -> None:
         uow = FakeUnitOfWork()
 
-        with pytest.raises(InvalidUsernameError, match='only contain'):
+        with pytest.raises(InvalidUserError, match='only contain'):
             await _register_user(uow).execute(
                 **_valid_input(username='', facebook_token='fb_111')
             )
@@ -248,63 +328,21 @@ class TestRegisterUserUsername:
     async def test_rejects_a_username_longer_than_50(self) -> None:
         uow = FakeUnitOfWork()
 
-        with pytest.raises(InvalidUsernameError, match='too long'):
+        with pytest.raises(InvalidUserError, match='too long'):
             await _register_user(uow).execute(**_valid_input(username='a' * 51))
-
-
-class TestRegisterUserPassword:
-    @pytest.mark.parametrize(
-        'password', ['secret1', 'a' * 51], ids=['shorter_than_8', 'longer_than_50']
-    )
-    async def test_rejects_a_password_out_of_range(self, password: str) -> None:
-        uow = FakeUnitOfWork()
-
-        with pytest.raises(InvalidPasswordError):
-            await _register_user(uow).execute(**_valid_input(password=password))
-
-
-class TestRegisterUserCellphone:
-    @pytest.mark.parametrize(
-        'cellphone',
-        ['987654321', '+51 abc654321', '+51 9876543210'],
-        ids=['without_prefix', 'with_letters', 'more_than_9_digits'],
-    )
-    async def test_rejects_a_cellphone_that_is_not_a_peruvian_mobile(
-        self, cellphone: str
-    ) -> None:
-        uow = FakeUnitOfWork()
-
-        with pytest.raises(InvalidCellphoneError):
-            await _register_user(uow).execute(**_valid_input(cellphone=cellphone))
-
-
-class TestRegisterUserEmail:
-    async def test_rejects_an_invalid_email(self) -> None:
-        uow = FakeUnitOfWork()
-
-        with pytest.raises(InvalidEmailError, match='is invalid'):
-            await _register_user(uow).execute(**_valid_input(email='fabio-mail.com'))
-
-    async def test_rejects_an_email_longer_than_250(self) -> None:
-        uow = FakeUnitOfWork()
-
-        with pytest.raises(InvalidEmailError, match='exceeds maximum length'):
-            await _register_user(uow).execute(
-                **_valid_input(email='a' * 251 + '@mail.com')
-            )
 
 
 class TestRegisterUserNames:
     async def test_rejects_a_first_name_with_digits(self) -> None:
         uow = FakeUnitOfWork()
 
-        with pytest.raises(InvalidNameError, match='first_name is invalid'):
+        with pytest.raises(InvalidUserError, match='first_name is invalid'):
             await _register_user(uow).execute(**_valid_input(first_name='fabio3'))
 
     async def test_rejects_a_last_name_with_symbols(self) -> None:
         uow = FakeUnitOfWork()
 
-        with pytest.raises(InvalidNameError, match='last_name is invalid'):
+        with pytest.raises(InvalidUserError, match='last_name is invalid'):
             await _register_user(uow).execute(**_valid_input(last_name='nunez@'))
 
     @pytest.mark.parametrize(
@@ -313,14 +351,14 @@ class TestRegisterUserNames:
     async def test_rejects_badly_placed_spaces(self, first_name: str) -> None:
         uow = FakeUnitOfWork()
 
-        with pytest.raises(InvalidNameError, match='first_name is invalid'):
+        with pytest.raises(InvalidUserError, match='first_name is invalid'):
             await _register_user(uow).execute(**_valid_input(first_name=first_name))
 
     @pytest.mark.parametrize('field', ['first_name', 'last_name'])
     async def test_rejects_a_name_longer_than_250(self, field: str) -> None:
         uow = FakeUnitOfWork()
 
-        with pytest.raises(InvalidNameError, match='exceeds maximum length'):
+        with pytest.raises(InvalidUserError, match='exceeds maximum length'):
             await _register_user(uow).execute(**_valid_input(**{field: 'a' * 251}))
 
     async def test_accepts_accents_and_compound_names(self) -> None:
@@ -331,3 +369,16 @@ class TestRegisterUserNames:
         )
 
         assert (user.first_name, user.last_name) == ('josé luis', 'de la cruz núñez')
+
+
+class TestRegisterUserSeveralErrors:
+    async def test_reports_every_failing_field_at_once(self) -> None:
+        uow = FakeUnitOfWork()
+
+        with pytest.raises(InvalidUserError) as raised:
+            await _register_user(uow).execute(
+                **_valid_input(email='fabio-mail.com', password='short')
+            )
+
+        causes = {type(cause) for cause in raised.value.errors}
+        assert causes == {InvalidEmailError, InvalidPasswordError}

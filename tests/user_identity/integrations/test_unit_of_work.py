@@ -61,7 +61,9 @@ class TestSqlAlchemyUnitOfWork:
         await insert_user(existing)
         duplicate = new_user(username=existing.username)
 
-        with pytest.raises(UserAlreadyExistsError, match='username'):
+        with pytest.raises(
+            UserAlreadyExistsError, match='User with this username already exists.'
+        ):
             async with SqlAlchemyUnitOfWork(session_factory) as uow:
                 await uow.users.add(duplicate)
                 await uow.commit()

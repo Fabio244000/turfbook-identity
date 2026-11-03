@@ -1,0 +1,38 @@
+Resources:
+  KeepWarmRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: turfbook-identity-${sls:stage}-keep-warm
+      PermissionsBoundary: arn:aws:iam::${aws:accountId}:policy/turfbook-lambda-boundary
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: ${aws:accountId}
+      Policies:
+        - PolicyName: invoke-api
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  Fn::GetAtt: [ApiLambdaFunction, Arn]
+  KeepWarmSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: turfbook-identity-${sls:stage}-keep-warm
+      ScheduleExpression: rate(5 minutes)
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      Target:
+        Arn:
+          Fn::GetAtt: [ApiLambdaFunction, Arn]
+        RoleArn:
+          Fn::GetAtt: [KeepWarmRole, Arn]
+        Input: '{"keep_warm": true}'

@@ -55,13 +55,19 @@ class TestRefreshSession:
         response = await _refresh(client, 'not-a-refresh-token')
 
         assert response.status_code == 401
-        assert response.json()['success'] is False
+        assert response.json() == {
+            'success': False,
+            'message': SESSION_EXPIRED,
+            'detail': None,
+            'data': None,
+        }
 
     @pytest.mark.parametrize('path', [TOKENS_PATH, REVOKE_PATH])
     async def test_requires_a_refresh_token(self, client, path):
         response = await client.post(path, json={})
 
         assert response.status_code == 422
+        assert response.json()['message'] == 'Refresh token is required.'
 
 
 class TestRevokeSession:

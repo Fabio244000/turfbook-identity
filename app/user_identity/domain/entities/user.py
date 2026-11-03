@@ -1,23 +1,42 @@
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Self
 from uuid import UUID, uuid4
 
 from app.user_identity.domain.constants import (
+    CELLPHONE_LENGTH,
     CELLPHONE_PATTERN,
+    EMAIL_MAX_LENGTH,
+    EMAIL_MIN_LENGTH,
     EMAIL_PATTERN,
     MAX_LENGTH,
     MAX_USERNAME_LENGTH,
     NAME_PATTERN,
-    PASSWORD_PATTERN,
+    PASSWORD_MAX_LENGTH,
+    PASSWORD_MIN_LENGTH,
     USERNAME_PATTERN,
 )
 from app.user_identity.domain.exceptions import (
     InvalidCellphoneError,
     InvalidEmailError,
+    InvalidFieldError,
     InvalidNameError,
     InvalidPasswordError,
+    InvalidUserError,
     InvalidUsernameError,
     MissingRequiredFieldsError,
+)
+from app.user_identity.domain.messages import (
+    CELLPHONE_INVALID,
+    EMAIL_INVALID,
+    EMAIL_REQUIRED,
+    FIELD_REQUIRED,
+    IDENTIFIER_REQUIRED,
+    NAME_INVALID,
+    NAME_TOO_LONG,
+    PASSWORD_LENGTH,
+    USERNAME_INVALID,
+    USERNAME_TOO_LONG,
 )
 
 
@@ -35,74 +54,110 @@ class User:
     gmail_token: str | None = field(default=None)
     uuid: UUID = field(default_factory=uuid4)
 
-    def _validate_cellphone(self, cellphone: str) -> None:
-        if not CELLPHONE_PATTERN.match(cellphone):
-            raise InvalidCellphoneError('cellphone format is invalid.')
-
-    def _validate_username(self, username: str | None) -> None:
-        if username is None:
-            return
-        if not USERNAME_PATTERN.match(username):
-            raise InvalidUsernameError(
-                'username is invalid, should only contain letters and numbers.'
-            )
-        if len(username) > MAX_USERNAME_LENGTH:
-            raise InvalidUsernameError('username is too long.')
-
-    def _validate_password(self, password: str | None) -> None:
-        if password is None:
-            return
-        if not PASSWORD_PATTERN.match(password):
-            raise InvalidPasswordError('password is invalid.')
-
-    def _validate_email(self, email: str | None) -> None:
-        if email is None:
-            return
-        if not EMAIL_PATTERN.match(email):
-            raise InvalidEmailError('email is invalid.')
-        self._validate_max_length(self.email, 'email', InvalidEmailError)
-
-    def _validate_max_length(
-        self, value: str | None, field_name: str, exception: type[Exception]
-    ) -> None:
-        if value is not None and len(value) > MAX_LENGTH:
-            raise exception(f'{field_name} exceeds maximum length of {MAX_LENGTH}.')
-
-    def _validate_required_field(self, field_name: str, value: str) -> None:
-        if value is None:
-            raise MissingRequiredFieldsError(f'{field_name} is required.')
-
-    def _validate_name(self, field_name: str, value: str) -> None:
-        if not NAME_PATTERN.match(value):
-            raise InvalidNameError(f'{field_name} is invalid.')
-
-    def _validate_has_identifier(
-        self,
-        username: str | None = None,
-        password: str | None = None,
+    @classmethod
+    def register(
+        cls,
+        first_name: str,
+        last_name: str,
+        cellphone: str,
+        username: str | None,
+        password: str | None,
+        email: str | None,
+        now: datetime,
         facebook_token: str | None = None,
         gmail_token: str | None = None,
-    ) -> None:
-        if (not facebook_token and not gmail_token) and not (username and password):
-            raise MissingRequiredFieldsError(
-                'must provide username and password, or a social token'
-            )
-
-    def __post_init__(self) -> None:
-        self._validate_has_identifier(
-            username=self.username,
-            password=self.password,
-            facebook_token=self.facebook_token,
-            gmail_token=self.gmail_token,
+    ) -> Self:
+        """A new user from its registration input; only here are input rules applied,
+        so a user rebuilt from stored data (a hashed password) is never re-validated."""
+        _ensure_identifier(username, password, facebook_token, gmail_token)
+        _ensure_required(
+            first_name=first_name, last_name=last_name, cellphone=cellphone
         )
-        self._validate_required_field('first_name', self.first_name)
-        self._validate_required_field('last_name', self.last_name)
-        self._validate_required_field('cellphone', self.cellphone)
-        self._validate_name('first_name', self.first_name)
-        self._validate_name('last_name', self.last_name)
-        self._validate_max_length(self.first_name, 'first_name', InvalidNameError)
-        self._validate_max_length(self.last_name, 'last_name', InvalidNameError)
-        self._validate_username(username=self.username)
-        self._validate_password(password=self.password)
-        self._validate_cellphone(cellphone=self.cellphone)
-        self._validate_email(email=self.email)
+        user = cls(
+            first_name=first_name,
+            last_name=last_name,
+            cellphone=cellphone.strip(),
+            username=username,
+            password=password,
+            email=email.strip().lower() if email is not None else None,
+            created_at=now,
+            updated_at=now,
+            facebook_token=facebook_token,
+            gmail_token=gmail_token,
+        )
+        errors = user._rule_errors()
+        if errors:
+            raise InvalidUserError(errors)
+        return user
+
+    def _rule_errors(self) -> list[InvalidFieldError]:
+        """Every failing field at once, so the client fixes them in one go."""
+        checks = (
+            _name_error('first_name', self.first_name),
+            _name_error('last_name', self.last_name),
+            _username_error(self.username),
+            _password_error(self.password),
+            _cellphone_error(self.cellphone),
+            _email_error(self.email),
+        )
+        return [error for error in checks if error is not None]
+
+
+def _ensure_identifier(
+    username: str | None,
+    password: str | None,
+    facebook_token: str | None,
+    gmail_token: str | None,
+) -> None:
+    if not (facebook_token or gmail_token) and not (username and password):
+        raise MissingRequiredFieldsError(IDENTIFIER_REQUIRED)
+
+
+def _ensure_required(**values: str | None) -> None:
+    for name, value in values.items():
+        if value is None:
+            raise MissingRequiredFieldsError(FIELD_REQUIRED.format(field=name))
+
+
+def _name_error(name: str, value: str) -> InvalidFieldError | None:
+    if len(value) > MAX_LENGTH:
+        return InvalidNameError(
+            NAME_TOO_LONG.format(field=name, max_length=MAX_LENGTH), name
+        )
+    if not NAME_PATTERN.match(value):
+        return InvalidNameError(NAME_INVALID.format(field=name), name)
+    return None
+
+
+def _username_error(username: str | None) -> InvalidFieldError | None:
+    if username is None:
+        return None
+    if len(username) > MAX_USERNAME_LENGTH:
+        return InvalidUsernameError(USERNAME_TOO_LONG, 'username')
+    if not USERNAME_PATTERN.match(username):
+        return InvalidUsernameError(USERNAME_INVALID, 'username')
+    return None
+
+
+def _password_error(password: str | None) -> InvalidFieldError | None:
+    if password is None:
+        return None
+    if not PASSWORD_MIN_LENGTH <= len(password) <= PASSWORD_MAX_LENGTH:
+        return InvalidPasswordError(PASSWORD_LENGTH, 'password')
+    return None
+
+
+def _cellphone_error(cellphone: str) -> InvalidFieldError | None:
+    if len(cellphone) != CELLPHONE_LENGTH or not CELLPHONE_PATTERN.match(cellphone):
+        return InvalidCellphoneError(CELLPHONE_INVALID, 'cellphone')
+    return None
+
+
+def _email_error(email: str | None) -> InvalidFieldError | None:
+    if not email:
+        return InvalidEmailError(EMAIL_REQUIRED, 'email')
+    if not EMAIL_MIN_LENGTH <= len(email) <= EMAIL_MAX_LENGTH:
+        return InvalidEmailError(EMAIL_INVALID, 'email')
+    if not EMAIL_PATTERN.match(email):
+        return InvalidEmailError(EMAIL_INVALID, 'email')
+    return None

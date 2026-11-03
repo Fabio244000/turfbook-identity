@@ -1,6 +1,7 @@
 from datetime import timedelta
 from uuid import uuid4
 
+from app.user_identity.application.messages import USER_ALREADY_EXISTS
 from app.user_identity.application.sessions import issue_refresh_token
 from app.user_identity.domain.entities.session_tokens import SessionTokens
 from app.user_identity.domain.entities.user import User
@@ -46,15 +47,14 @@ class RegisterUserUseCase(RegisterUserPort):
         gmail_token: str | None = None,
     ) -> tuple[User, SessionTokens]:
         now = self._clock.now()
-        user = User(
+        user = User.register(
             first_name=first_name,
             last_name=last_name,
             cellphone=cellphone,
             username=username,
             password=password,
             email=email,
-            created_at=now,
-            updated_at=now,
+            now=now,
             facebook_token=facebook_token,
             gmail_token=gmail_token,
         )
@@ -78,12 +78,12 @@ class RegisterUserUseCase(RegisterUserPort):
     async def _ensure_unique(self, user: User) -> None:
         users = self._uow.users
         if user.username and await users.exists_by_username(user.username):
-            raise UserAlreadyExistsError(
-                f'User with username {user.username} already exists.'
-            )
+            raise _already_exists('username', user.username)
         if await users.exists_by_cellphone(user.cellphone):
-            raise UserAlreadyExistsError(
-                f'User with cellphone {user.cellphone} already exists.'
-            )
+            raise _already_exists('cellphone', user.cellphone)
         if user.email and await users.exists_by_email(user.email):
-            raise UserAlreadyExistsError(f'User with email {user.email} already exists')
+            raise _already_exists('email', user.email)
+
+
+def _already_exists(field: str, value: str) -> UserAlreadyExistsError:
+    return UserAlreadyExistsError(USER_ALREADY_EXISTS.format(field=field, value=value))

@@ -28,7 +28,7 @@ def new_user() -> Callable[..., User]:
         data: dict[str, Any] = {
             'first_name': 'fabio',
             'last_name': 'nunez',
-            'cellphone': f'+51 9{uuid4().int % 10**8:08d}',
+            'cellphone': f'+519{uuid4().int % 10**8:08d}',
             'username': f'user{suffix}',
             'password': 'hashedsecret123',
             'email': f'user{suffix}@mail.com',

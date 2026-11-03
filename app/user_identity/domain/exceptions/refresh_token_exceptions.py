@@ -1,6 +1,5 @@
 from app.user_identity.domain.exceptions.domain_error import DomainError
-
-SESSION_EXPIRED_MESSAGE = 'Your session has expired. Please sign in again.'
+from app.user_identity.domain.messages import SESSION_EXPIRED
 
 
 class InvalidRefreshTokenError(DomainError):
@@ -8,4 +7,4 @@ class InvalidRefreshTokenError(DomainError):
     expired, revoked, reused): the client gets the same answer in every case."""
 
     def __init__(self) -> None:
-        super().__init__(SESSION_EXPIRED_MESSAGE)
+        super().__init__(SESSION_EXPIRED)

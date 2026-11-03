@@ -17,8 +17,10 @@ class BaseUserSchema(BaseModel):
 
 
 class UserRequest(BaseUserSchema):
-    """Datos para registrar a un usuario en el Sistema"""
+    """The registration input; the email is required to register (stored users may
+    lack it, so the response keeps it optional)."""
 
+    email: str
     password: str | None = None
 
 

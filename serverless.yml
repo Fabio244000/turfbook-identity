@@ -53,7 +53,7 @@ functions:
       - Ref: PythonRequirementsLambdaLayer
     events:
       - httpApi: '*'
-    timeout: 29
+    timeout: 15
 
   migrate:
     handler: app.migrations.handler.handler
@@ -62,4 +62,7 @@ functions:
     timeout: 30
     maximumRetryAttempts: 0
 
-resources: ${file(./deploy/resources/migrations.yml)}
+resources:
+  - ${file(./deploy/resources/http-api.yml)}
+  - ${file(./deploy/resources/migrations.yml)}
+  - ${file(./deploy/resources/keep-warm.yml)}
