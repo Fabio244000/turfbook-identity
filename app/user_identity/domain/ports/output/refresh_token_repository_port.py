@@ -15,4 +15,8 @@ class RefreshTokenRepositoryPort(ABC):
     async def get_by_session(self, session_uuid: UUID) -> list[RefreshToken]: ...
 
     @abstractmethod
+    async def get_active_by_user(self, user_uuid: UUID) -> list[RefreshToken]:
+        """The user's tokens that are not revoked yet."""
+
+    @abstractmethod
     async def update(self, token: RefreshToken) -> None: ...

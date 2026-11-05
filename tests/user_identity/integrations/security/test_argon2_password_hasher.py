@@ -8,3 +8,8 @@ class TestArgon2PasswordHasher:
         hashed = Argon2PasswordHasher().hash('secret1234')
 
         assert hashed != 'secret1234'
+
+    def test_without_a_hash_no_password_matches(self):
+        matches = Argon2PasswordHasher().verify('GrassElSol2026!', None)
+
+        assert matches is False

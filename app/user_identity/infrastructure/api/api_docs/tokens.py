@@ -47,8 +47,10 @@ REFRESH_SESSION_DOCS: dict[str, Any] = {
             'content': json_content(renewed=example('Renewed', _RENEWED)),
         },
         401: error_response(
-            'The refresh token is unknown, expired, revoked or already used: the '
-            'user signs in again. One text whatever the cause.',
+            'The refresh token is unknown, expired, revoked or already used; the '
+            'session was replaced by a sign-in on another device; or the account '
+            'is blocked or closed: the user signs in again. One text whatever the '
+            'cause.',
             expired=error_example('Session expired', SESSION_EXPIRED),
         ),
         422: _MISSING_REFRESH_TOKEN,

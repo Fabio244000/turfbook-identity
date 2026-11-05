@@ -13,7 +13,7 @@ from app.user_identity.infrastructure.api.exception_handlers import (
 from app.user_identity.infrastructure.api.v1_router import router as v1_router
 from config.settings import settings
 
-app = FastAPI(title='TurfBoor User Service')
+app = FastAPI(title='TurfBook User Service')
 
 app.include_router(v1_router, prefix=settings.api_prefix)
 app.add_exception_handler(DomainError, domain_exception_handler)

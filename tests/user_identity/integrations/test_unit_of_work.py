@@ -1,6 +1,7 @@
 import pytest
 from sqlalchemy.exc import IntegrityError
 
+from app.user_identity.domain.entities.user import AccountStatus
 from app.user_identity.domain.exceptions import UserAlreadyExistsError
 from app.user_identity.infrastructure.database.unit_of_work import (
     SqlAlchemyUnitOfWork,
@@ -53,6 +54,32 @@ class TestSqlAlchemyUnitOfWork:
             await uow.commit()
 
         assert await stored_refresh_token(token.uuid) is not None
+
+    async def test_commit_saves_the_block_and_its_event_together(
+        self,
+        session_factory,
+        new_user,
+        insert_user,
+        new_account_event,
+        stored_account_state,
+        stored_account_event,
+    ):
+        user = new_user()
+        await insert_user(user)
+        event = new_account_event(user)
+
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
+            found = await uow.users.get_by_uuid(user.uuid)
+            assert found is not None
+            found.status = AccountStatus.BLOCKED
+            await uow.users.update(found)
+            await uow.account_events.add(event)
+            await uow.commit()
+
+        state = await stored_account_state(user.uuid)
+        assert state is not None
+        assert state[0] == 'blocked'
+        assert await stored_account_event(event.uuid) is not None
 
     async def test_a_duplicate_found_by_the_database_raises_user_already_exists(
         self, session_factory, new_user, insert_user

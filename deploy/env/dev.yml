@@ -8,3 +8,4 @@ DATABASE_URL:
       DbName: '{{resolve:secretsmanager:turfbook/identity/dev/db:SecretString:dbname}}'
       DbHost: ${ssm:/turfbook/dev/db_host}
       DbPort: ${ssm:/turfbook/dev/db_port}
+NOTICES_TOPIC_ARN: ${ssm:/turfbook/notifications/dev/topic_arn}

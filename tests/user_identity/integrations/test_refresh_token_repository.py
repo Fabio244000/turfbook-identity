@@ -59,6 +59,27 @@ class TestRefreshTokenRepository:
 
         assert {token.uuid for token in found} == {first.uuid, second.uuid}
 
+    async def test_finds_the_tokens_of_a_user_that_are_not_revoked(
+        self,
+        session,
+        new_user,
+        insert_user,
+        new_refresh_token,
+        insert_refresh_token,
+    ):
+        user, other_user = new_user(), new_user()
+        for owner in (user, other_user):
+            await insert_user(owner)
+        active = new_refresh_token(user)
+        revoked = new_refresh_token(user, revoked_at=LATER)
+        of_other_user = new_refresh_token(other_user)
+        for token in (active, revoked, of_other_user):
+            await insert_refresh_token(token)
+
+        found = await RefreshTokenRepository(session).get_active_by_user(user.uuid)
+
+        assert [token.uuid for token in found] == [active.uuid]
+
     async def test_saves_the_changes_of_a_token(
         self,
         session,

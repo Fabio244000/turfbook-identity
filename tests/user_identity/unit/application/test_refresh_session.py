@@ -7,7 +7,7 @@ from app.user_identity.application.use_cases.refresh_session import (
     RefreshSessionUseCase,
 )
 from app.user_identity.domain.entities.refresh_token import RefreshToken
-from app.user_identity.domain.entities.user import User
+from app.user_identity.domain.entities.user import AccountStatus, User
 from app.user_identity.domain.exceptions import InvalidRefreshTokenError
 from tests.fakes.user_identity import (
     FakeClock,
@@ -123,6 +123,19 @@ class TestRefreshSessionRejections:
             await _refresh_session(uow, NOW).execute('old')
 
         assert uow.committed is False
+        assert uow.refresh_tokens.stored('hash-old').used_at is None
+
+    @pytest.mark.parametrize('status', [AccountStatus.BLOCKED, AccountStatus.CLOSED])
+    async def test_rejects_an_account_that_is_not_active(
+        self, status: AccountStatus
+    ) -> None:
+        user = _user()
+        user.status = status
+        uow = FakeUnitOfWork(users=[user], refresh_tokens=[_token(user, 'old')])
+
+        with pytest.raises(InvalidRefreshTokenError):
+            await _refresh_session(uow, NOW).execute('old')
+
         assert uow.refresh_tokens.stored('hash-old').used_at is None
 
 
