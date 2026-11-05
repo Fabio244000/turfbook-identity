@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Self
 
+from app.user_identity.domain.ports.output.account_event_repository_port import (
+    AccountEventRepositoryPort,
+)
 from app.user_identity.domain.ports.output.refresh_token_repository_port import (
     RefreshTokenRepositoryPort,
 )
@@ -12,6 +15,7 @@ from app.user_identity.domain.ports.output.user_repository_port import (
 class UnitOfWorkPort(ABC):
     users: UserRepositoryPort
     refresh_tokens: RefreshTokenRepositoryPort
+    account_events: AccountEventRepositoryPort
 
     async def __aenter__(self) -> Self:
         return self

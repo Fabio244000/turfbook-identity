@@ -3,6 +3,7 @@ from datetime import timedelta
 from app.user_identity.application.sessions import issue_refresh_token, revoke_session
 from app.user_identity.domain.entities.refresh_token import RefreshToken
 from app.user_identity.domain.entities.session_tokens import SessionTokens
+from app.user_identity.domain.entities.user import AccountStatus
 from app.user_identity.domain.exceptions import InvalidRefreshTokenError
 from app.user_identity.domain.ports.input.refresh_session_port import (
     RefreshSessionPort,
@@ -41,7 +42,8 @@ class RefreshSessionUseCase(RefreshSessionPort):
                 await self._uow.commit()
                 raise InvalidRefreshTokenError()
             token.use(now)
-            if not await self._uow.users.exists_by_uuid(token.user_uuid):
+            user = await self._uow.users.get_by_uuid(token.user_uuid)
+            if user is None or user.status is not AccountStatus.ACTIVE:
                 raise InvalidRefreshTokenError()
             await self._uow.refresh_tokens.update(token)
             new_refresh_token = await issue_refresh_token(

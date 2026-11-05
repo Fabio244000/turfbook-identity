@@ -7,6 +7,9 @@ from app.user_identity.domain.ports.output.unit_of_work_port import UnitOfWorkPo
 from app.user_identity.infrastructure.database.constraint_errors import (
     to_domain_error,
 )
+from app.user_identity.infrastructure.database.repositories.account_event_repository import (
+    AccountEventRepository,
+)
 from app.user_identity.infrastructure.database.repositories.refresh_token_repository import (
     RefreshTokenRepository,
 )
@@ -23,6 +26,7 @@ class SqlAlchemyUnitOfWork(UnitOfWorkPort):
         self._session = self._session_factory()
         self.users = UserRepository(self._session)
         self.refresh_tokens = RefreshTokenRepository(self._session)
+        self.account_events = AccountEventRepository(self._session)
         return await super().__aenter__()
 
     async def __aexit__(self, *args: object) -> None:

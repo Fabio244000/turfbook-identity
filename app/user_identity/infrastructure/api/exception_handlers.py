@@ -7,7 +7,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.user_identity.domain.exceptions import (
+    AccountBlockedError,
     DomainError,
+    InvalidCredentialsError,
     InvalidRefreshTokenError,
     InvalidUserError,
     MissingRequiredFieldsError,
@@ -34,6 +36,8 @@ STATUS_MAP: dict[type[DomainError], int] = {
     MissingRequiredFieldsError: 422,
     UserAlreadyExistsError: 409,
     InvalidRefreshTokenError: 401,
+    InvalidCredentialsError: 401,
+    AccountBlockedError: 403,
 }
 
 # Entity attribute of a rule error → its path in the request body.

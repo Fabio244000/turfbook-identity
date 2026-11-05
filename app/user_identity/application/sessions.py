@@ -40,3 +40,11 @@ async def revoke_session(
     for token in await uow.refresh_tokens.get_by_session(session_uuid):
         token.revoke(now)
         await uow.refresh_tokens.update(token)
+
+
+async def revoke_user_sessions(
+    uow: UnitOfWorkPort, user_uuid: UUID, now: datetime
+) -> None:
+    for token in await uow.refresh_tokens.get_active_by_user(user_uuid):
+        token.revoke(now)
+        await uow.refresh_tokens.update(token)

@@ -9,6 +9,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.user_identity.infrastructure.api.dependencies import (
     get_clock,
+    get_notice_publisher,
     get_unit_of_work,
 )
 from app.user_identity.infrastructure.database.unit_of_work import (
@@ -16,7 +17,7 @@ from app.user_identity.infrastructure.database.unit_of_work import (
 )
 from app.user_identity.main import app
 from config.settings import settings
-from tests.fakes.user_identity import FakeClock
+from tests.fakes.user_identity import FakeClock, FakeNoticePublisher
 
 # Public contract: written literally so an accidental prefix/version change fails here.
 USERS_PATH = '/api/v1/users'
@@ -42,12 +43,19 @@ def clock() -> FakeClock:
     return FakeClock(datetime.now(UTC))
 
 
+@pytest.fixture
+def notice_publisher() -> FakeNoticePublisher:
+    """SNS cannot run locally: the notices the API publishes are kept here."""
+    return FakeNoticePublisher()
+
+
 @pytest_asyncio.fixture
-async def client(session_factory, clock):
+async def client(session_factory, clock, notice_publisher):
     app.dependency_overrides[get_unit_of_work] = lambda: SqlAlchemyUnitOfWork(
         session_factory
     )
     app.dependency_overrides[get_clock] = lambda: clock
+    app.dependency_overrides[get_notice_publisher] = lambda: notice_publisher
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url='http://test') as client:
         yield client

@@ -8,11 +8,18 @@ import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from app.user_identity.domain.entities.account_event import (
+    AccountEvent,
+    AccountEventActor,
+    AccountEventReason,
+    AccountEventType,
+)
 from app.user_identity.domain.entities.refresh_token import RefreshToken
 from app.user_identity.domain.entities.user import User
 
 StoredUser = tuple[Any, ...] | None
 StoredRefreshToken = tuple[Any, ...] | None
+StoredAccountEvent = tuple[Any, ...] | None
 
 
 REGISTERED_AT = datetime(2026, 10, 29, 12, 0, tzinfo=UTC)
@@ -47,9 +54,11 @@ def insert_user(connection: AsyncConnection) -> Callable[[User], Awaitable[None]
         await connection.execute(
             text(
                 'INSERT INTO users (uuid, first_name, last_name, cellphone,'
-                ' username, password, email, created_at, updated_at)'
+                ' username, password, email, created_at, updated_at, status,'
+                ' failed_attempts, last_failed_attempt_on, blocked_at, closed_at)'
                 ' VALUES (:uuid, :first_name, :last_name, :cellphone,'
-                ' :username, :password, :email, :created_at, :updated_at)'
+                ' :username, :password, :email, :created_at, :updated_at, :status,'
+                ' :failed_attempts, :last_failed_attempt_on, :blocked_at, :closed_at)'
             ),
             {
                 'uuid': user.uuid,
@@ -61,10 +70,33 @@ def insert_user(connection: AsyncConnection) -> Callable[[User], Awaitable[None]
                 'email': user.email,
                 'created_at': user.created_at,
                 'updated_at': user.updated_at,
+                'status': user.status.value,
+                'failed_attempts': user.failed_attempts,
+                'last_failed_attempt_on': user.last_failed_attempt_on,
+                'blocked_at': user.blocked_at,
+                'closed_at': user.closed_at,
             },
         )
 
     return _insert_user
+
+
+@pytest.fixture
+def stored_account_state(
+    connection: AsyncConnection,
+) -> Callable[[UUID], Awaitable[StoredUser]]:
+    async def _stored_account_state(uuid: UUID) -> StoredUser:
+        result = await connection.execute(
+            text(
+                'SELECT status, failed_attempts, last_failed_attempt_on,'
+                ' blocked_at, closed_at FROM users WHERE uuid = :uuid'
+            ),
+            {'uuid': uuid},
+        )
+        row = result.one_or_none()
+        return tuple(row) if row else None
+
+    return _stored_account_state
 
 
 @pytest_asyncio.fixture
@@ -155,3 +187,66 @@ def stored_refresh_token(
         return tuple(row) if row else None
 
     return _stored_refresh_token
+
+
+@pytest.fixture
+def new_account_event() -> Callable[..., AccountEvent]:
+    def _new_account_event(user: User, **overrides: Any) -> AccountEvent:
+        data: dict[str, Any] = {
+            'user_uuid': user.uuid,
+            'type': AccountEventType.BLOCKED,
+            'reason': AccountEventReason.FAILED_ATTEMPTS,
+            'actor': AccountEventActor.SYSTEM,
+            'created_at': REGISTERED_AT,
+            'notice_id': uuid4(),
+        }
+        data.update(overrides)
+        return AccountEvent(**data)
+
+    return _new_account_event
+
+
+@pytest.fixture
+def insert_account_event(
+    connection: AsyncConnection,
+) -> Callable[[AccountEvent], Awaitable[None]]:
+    async def _insert_account_event(event: AccountEvent) -> None:
+        await connection.execute(
+            text(
+                'INSERT INTO account_events (uuid, user_uuid, type, reason, actor,'
+                ' notice_id, notice_published_at, created_at)'
+                ' VALUES (:uuid, :user_uuid, :type, :reason, :actor,'
+                ' :notice_id, :notice_published_at, :created_at)'
+            ),
+            {
+                'uuid': event.uuid,
+                'user_uuid': event.user_uuid,
+                'type': event.type.value,
+                'reason': event.reason.value,
+                'actor': event.actor.value,
+                'notice_id': event.notice_id,
+                'notice_published_at': event.notice_published_at,
+                'created_at': event.created_at,
+            },
+        )
+
+    return _insert_account_event
+
+
+@pytest.fixture
+def stored_account_event(
+    connection: AsyncConnection,
+) -> Callable[[UUID], Awaitable[StoredAccountEvent]]:
+    async def _stored_account_event(uuid: UUID) -> StoredAccountEvent:
+        result = await connection.execute(
+            text(
+                'SELECT user_uuid, type, reason, actor, notice_id,'
+                ' notice_published_at, created_at'
+                ' FROM account_events WHERE uuid = :uuid'
+            ),
+            {'uuid': uuid},
+        )
+        row = result.one_or_none()
+        return tuple(row) if row else None
+
+    return _stored_account_event

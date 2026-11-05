@@ -9,6 +9,9 @@ from app.user_identity.infrastructure.api.schemas.api_response import (
     ApiErrorResponse,
     ApiResponse,
 )
+from app.user_identity.infrastructure.api.schemas.session_schema import (
+    SessionRequest,
+)
 from app.user_identity.infrastructure.api.schemas.token_schema import (
     RefreshTokenRequest,
     SessionTokensData,
@@ -29,6 +32,11 @@ OPERATIONS: dict[tuple[str, str], dict[str, Any]] = {
         'request': UserRequest,
         'success': ('201', ApiResponse[RegisterUserData]),
         'codes': {'201', '409', '422', '500'},
+    },
+    ('/api/v1/sessions', 'post'): {
+        'request': SessionRequest,
+        'success': ('201', ApiResponse[SessionTokensData]),
+        'codes': {'201', '401', '403', '422', '500'},
     },
     ('/api/v1/tokens', 'post'): {
         'request': RefreshTokenRequest,
@@ -66,6 +74,9 @@ def _model_of(code: str, spec: dict[str, Any]) -> type[BaseModel] | None:
 
 
 class TestOpenApi:
+    async def test_is_titled_with_the_service_name(self, openapi):
+        assert openapi['info']['title'] == 'TurfBook User Service'
+
     async def test_no_operation_is_published_without_its_documentation(self, openapi):
         published = {
             (path, method)

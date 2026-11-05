@@ -31,6 +31,14 @@ class RefreshTokenRepository(RefreshTokenRepositoryPort):
         models = (await self._session.execute(query)).scalars()
         return [self._to_entity(model) for model in models]
 
+    async def get_active_by_user(self, user_uuid: UUID) -> list[RefreshToken]:
+        query = select(RefreshTokenModel).where(
+            RefreshTokenModel.user_uuid == user_uuid,
+            RefreshTokenModel.revoked_at.is_(None),
+        )
+        models = (await self._session.execute(query)).scalars()
+        return [self._to_entity(model) for model in models]
+
     async def update(self, token: RefreshToken) -> None:
         await self._session.merge(self._to_model(token))
 

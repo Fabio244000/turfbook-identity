@@ -7,6 +7,7 @@ stages:
       privateSubnetA: subnet-0163ffcf34770d937
       privateSubnetB: subnet-0f44784a3de31da43
       lambdaDbSecurityGroup: sg-094dae12950b8a2e9
+      snsManagedKeyId: 8dfab779-9d69-4efb-b954-bb1970192247
 
 provider:
   name: aws
@@ -54,6 +55,17 @@ functions:
     events:
       - httpApi: '*'
     timeout: 15
+    iam:
+      role:
+        statements:
+          - Effect: Allow
+            Action: sns:Publish
+            Resource: ${ssm:/turfbook/notifications/${sls:stage}/topic_arn}
+          - Effect: Allow
+            Action:
+              - kms:GenerateDataKey*
+              - kms:Decrypt
+            Resource: arn:aws:kms:${aws:region}:${aws:accountId}:key/${param:snsManagedKeyId}
 
   migrate:
     handler: app.migrations.handler.handler

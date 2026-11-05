@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
+from enum import StrEnum
 from typing import Self
 from uuid import UUID, uuid4
 
@@ -40,6 +41,12 @@ from app.user_identity.domain.messages import (
 )
 
 
+class AccountStatus(StrEnum):
+    ACTIVE = 'active'
+    BLOCKED = 'blocked'
+    CLOSED = 'closed'
+
+
 @dataclass
 class User:
     first_name: str
@@ -52,6 +59,12 @@ class User:
     updated_at: datetime
     facebook_token: str | None = field(default=None)
     gmail_token: str | None = field(default=None)
+    status: AccountStatus = AccountStatus.ACTIVE
+    # Consecutive failed sign-ins of the business day `last_failed_attempt_on`.
+    failed_attempts: int = 0
+    last_failed_attempt_on: date | None = None
+    blocked_at: datetime | None = None
+    closed_at: datetime | None = None
     uuid: UUID = field(default_factory=uuid4)
 
     @classmethod
@@ -89,6 +102,20 @@ class User:
         if errors:
             raise InvalidUserError(errors)
         return user
+
+    def record_failed_attempt(self, today: date, now: datetime, limit: int) -> None:
+        """`today` is the business day of `now`: the attempts of another day are not
+        consecutive, so they start again from zero."""
+        if self.last_failed_attempt_on != today:
+            self.failed_attempts = 0
+        self.failed_attempts += 1
+        self.last_failed_attempt_on = today
+        if self.failed_attempts >= limit:
+            self.status = AccountStatus.BLOCKED
+            self.blocked_at = now
+
+    def record_sign_in(self) -> None:
+        self.failed_attempts = 0
 
     def _rule_errors(self) -> list[InvalidFieldError]:
         """Every failing field at once, so the client fixes them in one go."""

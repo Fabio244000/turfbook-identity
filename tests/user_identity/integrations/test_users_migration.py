@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 from alembic.config import Config
@@ -8,8 +9,9 @@ from alembic import command
 from app.migrations.handler import ALEMBIC_INIT_PATH
 from config.settings import settings
 
-# The revision right before this ticket's migration of `users`.
+# The revisions right before each migration of `users`.
 BEFORE_E164_CELLPHONES = '526c4e04b55e'
+BEFORE_ACCOUNT_STATE = 'bf64ac9ccdb6'
 REGISTERED_AT = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
 
 
@@ -59,6 +61,32 @@ def _stored_cellphone_after_upgrade(old_cellphone: str) -> str:
         engine.dispose()
 
 
+def _account_state_after_upgrade() -> tuple[Any, ...]:
+    """Inserts a user at the revision before the account state, upgrades to head and
+    returns its state; the database always ends at head, without the user."""
+    config = Config(str(ALEMBIC_INIT_PATH))
+    engine = create_engine(settings.database_url)
+    user_uuid = uuid4()
+    command.downgrade(config, BEFORE_ACCOUNT_STATE)
+    try:
+        _insert_user(engine, user_uuid, f'+519{uuid4().int % 10**8:08d}')
+        command.upgrade(config, 'head')
+        with engine.connect() as connection:
+            return tuple(
+                connection.execute(
+                    text(
+                        'SELECT status, failed_attempts, last_failed_attempt_on,'
+                        ' blocked_at, closed_at FROM users WHERE uuid = :uuid'
+                    ),
+                    {'uuid': user_uuid},
+                ).one()
+            )
+    finally:
+        command.upgrade(config, 'head')
+        _delete_user(engine, user_uuid)
+        engine.dispose()
+
+
 class TestUsersMigration:
     def test_moves_stored_cellphones_to_e164(self) -> None:
         old_cellphone = f'+51 9{uuid4().int % 10**8:08d}'
@@ -66,3 +94,8 @@ class TestUsersMigration:
         stored = _stored_cellphone_after_upgrade(old_cellphone)
 
         assert stored == old_cellphone.replace(' ', '')
+
+    def test_existing_users_become_active_without_failed_attempts(self) -> None:
+        state = _account_state_after_upgrade()
+
+        assert state == ('active', 0, None, None, None)
