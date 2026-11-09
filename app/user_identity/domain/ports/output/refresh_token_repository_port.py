@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from uuid import UUID
 
 from app.user_identity.domain.entities.refresh_token import RefreshToken
@@ -20,3 +21,6 @@ class RefreshTokenRepositoryPort(ABC):
 
     @abstractmethod
     async def update(self, token: RefreshToken) -> None: ...
+
+    @abstractmethod
+    async def delete_of_users(self, user_uuids: Sequence[UUID]) -> None: ...

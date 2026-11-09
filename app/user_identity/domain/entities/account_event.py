@@ -38,11 +38,58 @@ class AccountEvent:
 
     @classmethod
     def blocked_for_failed_attempts(cls, user_uuid: UUID, now: datetime) -> Self:
+        return cls._with_notice(
+            user_uuid,
+            AccountEventType.BLOCKED,
+            AccountEventReason.FAILED_ATTEMPTS,
+            AccountEventActor.SYSTEM,
+            now,
+        )
+
+    @classmethod
+    def blocked_by_turfbook(cls, user_uuid: UUID, now: datetime) -> Self:
+        return cls._with_notice(
+            user_uuid,
+            AccountEventType.BLOCKED,
+            AccountEventReason.TURFBOOK,
+            AccountEventActor.TURFBOOK,
+            now,
+        )
+
+    @classmethod
+    def unblocked_by_turfbook(cls, user_uuid: UUID, now: datetime) -> Self:
+        return cls._with_notice(
+            user_uuid,
+            AccountEventType.UNBLOCKED,
+            AccountEventReason.TURFBOOK,
+            AccountEventActor.TURFBOOK,
+            now,
+        )
+
+    @classmethod
+    def closed_for_inactivity(cls, user_uuid: UUID, now: datetime) -> Self:
+        return cls._with_notice(
+            user_uuid,
+            AccountEventType.CLOSED,
+            AccountEventReason.INACTIVITY_7_DAYS,
+            AccountEventActor.SYSTEM,
+            now,
+        )
+
+    @classmethod
+    def _with_notice(
+        cls,
+        user_uuid: UUID,
+        type: AccountEventType,
+        reason: AccountEventReason,
+        actor: AccountEventActor,
+        now: datetime,
+    ) -> Self:
         return cls(
             user_uuid=user_uuid,
-            type=AccountEventType.BLOCKED,
-            reason=AccountEventReason.FAILED_ATTEMPTS,
-            actor=AccountEventActor.SYSTEM,
+            type=type,
+            reason=reason,
+            actor=actor,
             created_at=now,
             notice_id=uuid4(),
         )

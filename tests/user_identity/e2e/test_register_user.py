@@ -1,5 +1,4 @@
 import re
-from typing import Any
 
 import jwt
 from httpx import ASGITransport, AsyncClient
@@ -7,14 +6,10 @@ from httpx import ASGITransport, AsyncClient
 from app.user_identity.infrastructure.api.dependencies import get_register_user_use_case
 from app.user_identity.main import app
 from config.settings import settings
-from tests.user_identity.e2e.conftest import USERS_PATH, valid_user_payload
+from tests.user_identity.e2e.conftest import USERS_PATH, error_body, valid_user_payload
 
 BASE64URL_256_BITS = re.compile(r'[A-Za-z0-9_-]{43}')
 VALIDATION_FAILED = 'There were problems with the submitted data.'
-
-
-def _error(message: str, detail: list[dict[str, str]] | None = None) -> dict[str, Any]:
-    return {'success': False, 'message': message, 'detail': detail, 'data': None}
 
 
 class TestRegisterUser:
@@ -77,7 +72,7 @@ class TestRegisterUserDuplicates:
         )
 
         assert response.status_code == 409
-        assert response.json() == _error(
+        assert response.json() == error_body(
             f'User with username {first["username"]} already exists.'
         )
 
@@ -100,7 +95,7 @@ class TestRegisterUserInvalidData:
         response = await client.post(USERS_PATH, json=payload)
 
         assert response.status_code == 422
-        assert response.json() == _error(
+        assert response.json() == error_body(
             'Password must be between 15 and 64 characters.'
         )
 
@@ -110,7 +105,7 @@ class TestRegisterUserInvalidData:
         response = await client.post(USERS_PATH, json=payload)
 
         assert response.status_code == 422
-        assert response.json() == _error(
+        assert response.json() == error_body(
             VALIDATION_FAILED,
             [
                 {
@@ -128,7 +123,7 @@ class TestRegisterUserInvalidData:
         response = await client.post(USERS_PATH, json=payload)
 
         assert response.status_code == 422
-        assert response.json() == _error('Email is required.')
+        assert response.json() == error_body('Email is required.')
 
     async def test_returns_422_without_username_and_password_or_social_token(
         self, client
@@ -147,7 +142,7 @@ class TestRegisterUserInvalidData:
         response = await client.post(USERS_PATH, json=payload)
 
         assert response.status_code == 422
-        assert response.json() == _error(
+        assert response.json() == error_body(
             VALIDATION_FAILED,
             [
                 {'field': 'first_name', 'error': 'First name is required.'},
@@ -168,6 +163,6 @@ class TestRegisterUserUnexpectedError:
         app.dependency_overrides.clear()
 
         assert response.status_code == 500
-        assert response.json() == _error(
+        assert response.json() == error_body(
             'An unexpected error occurred. Please try again later.'
         )

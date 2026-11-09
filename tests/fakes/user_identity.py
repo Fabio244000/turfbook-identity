@@ -1,11 +1,13 @@
+from collections.abc import Sequence
 from dataclasses import replace
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from app.user_identity.domain.entities.account_event import AccountEvent
 from app.user_identity.domain.entities.notice import Notice
 from app.user_identity.domain.entities.refresh_token import RefreshToken
-from app.user_identity.domain.entities.user import User
+from app.user_identity.domain.entities.user import AccountStatus, User
 from app.user_identity.domain.exceptions import NoticeNotPublishedError
 from app.user_identity.domain.ports.output.account_event_repository_port import (
     AccountEventRepositoryPort,
@@ -50,9 +52,27 @@ class FakeUserRepository(UserRepositoryPort):
         found = next((u for u in self.users if u.username == username), None)
         return replace(found) if found else None
 
+    async def get_by_uuid_for_update(self, user_uuid: UUID) -> User | None:
+        return await self.get_by_uuid(user_uuid)
+
+    async def get_blocked_before(self, cutoff: datetime) -> list[User]:
+        return [
+            replace(u)
+            for u in self.users
+            if u.status is AccountStatus.BLOCKED
+            and u.blocked_at is not None
+            and u.blocked_at <= cutoff
+        ]
+
+    async def get_closed(self) -> list[User]:
+        return [replace(u) for u in self.users if u.status is AccountStatus.CLOSED]
+
     async def update(self, user: User) -> None:
         index = next(i for i, u in enumerate(self.users) if u.uuid == user.uuid)
         self.users[index] = replace(user)
+
+    async def delete(self, user_uuids: Sequence[UUID]) -> None:
+        self.users = [u for u in self.users if u.uuid not in user_uuids]
 
     async def exists_by_username(self, username: str) -> bool:
         return any(user.username == username for user in self.users)
@@ -92,6 +112,9 @@ class FakeRefreshTokenRepository(RefreshTokenRepositoryPort):
         index = next(i for i, t in enumerate(self.tokens) if t.uuid == token.uuid)
         self.tokens[index] = replace(token)
 
+    async def delete_of_users(self, user_uuids: Sequence[UUID]) -> None:
+        self.tokens = [t for t in self.tokens if t.user_uuid not in user_uuids]
+
     def stored(self, token_hash: str) -> RefreshToken:
         return next(t for t in self.tokens if t.token_hash == token_hash)
 
@@ -107,24 +130,42 @@ class FakeAccountEventRepository(AccountEventRepositoryPort):
         index = next(i for i, e in enumerate(self.events) if e.uuid == event.uuid)
         self.events[index] = replace(event)
 
+    async def get_pending_notices(self) -> list[AccountEvent]:
+        pending = [
+            e
+            for e in self.events
+            if e.notice_id is not None and e.notice_published_at is None
+        ]
+        return [replace(e) for e in sorted(pending, key=lambda e: e.created_at)]
+
+    async def delete_of_users(self, user_uuids: Sequence[UUID]) -> None:
+        self.events = [e for e in self.events if e.user_uuid not in user_uuids]
+
 
 class FakeUnitOfWork(UnitOfWorkPort):
     """Leaving without commit restores the last committed state, like a database
-    rollback, so a test only sees what a use case actually committed."""
+    rollback, so a test only sees what a use case actually committed. With
+    `failing_commit`, that commit (counted from 1) fails, as a database that goes down."""
 
     def __init__(
         self,
         users: list[User] | None = None,
         refresh_tokens: list[RefreshToken] | None = None,
         account_events: list[AccountEvent] | None = None,
+        failing_commit: int | None = None,
     ) -> None:
         self.users = FakeUserRepository(users)
         self.refresh_tokens = FakeRefreshTokenRepository(refresh_tokens)
         self.account_events = FakeAccountEventRepository(account_events)
         self.committed = False
+        self.failing_commit = failing_commit
+        self.commits = 0
         self._save()
 
     async def commit(self) -> None:
+        self.commits += 1
+        if self.commits == self.failing_commit:
+            raise RuntimeError('the database is not available')
         self.committed = True
         self._save()
 
@@ -175,13 +216,36 @@ class FakeRefreshTokenGenerator(RefreshTokenGeneratorPort):
 
 
 class FakeNoticePublisher(NoticePublisherPort):
-    """Keeps what it publishes; with `fails`, publishing fails as without the NAT."""
+    """Keeps what it publishes. With `fails` every publication fails, as without the
+    NAT (set it back to False to "create" the NAT); with `failing_recipients` only the
+    notices of those users fail. It fails as its port declares: NoticeNotPublishedError."""
 
     def __init__(self, fails: bool = False) -> None:
         self.published: list[Notice] = []
-        self._fails = fails
+        self.attempted: list[Notice] = []
+        self.fails = fails
+        self.failing_recipients: set[UUID] = set()
 
     async def publish(self, notice: Notice) -> None:
-        if self._fails:
+        self.attempted.append(notice)
+        if self.fails or notice.recipient.uuid in self.failing_recipients:
             raise NoticeNotPublishedError()
         self.published.append(notice)
+
+    @property
+    def sent(self) -> list[dict[str, Any]]:
+        """What was published, as plain data (like the message notifications reads),
+        so a test checks it without touching the domain."""
+        return [
+            {
+                'notice_id': notice.notice_id,
+                'recipient': notice.recipient.uuid,
+                'subject': notice.subject,
+                'body': notice.body,
+            }
+            for notice in self.published
+        ]
+
+    @property
+    def attempted_ids(self) -> list[UUID]:
+        return [notice.notice_id for notice in self.attempted]

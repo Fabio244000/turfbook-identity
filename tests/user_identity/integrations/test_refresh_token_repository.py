@@ -99,3 +99,25 @@ class TestRefreshTokenRepository:
         stored = await stored_refresh_token(token.uuid)
         assert stored is not None
         assert stored[5:] == (LATER, LATER)
+
+    async def test_deletes_only_the_tokens_of_the_users_given(
+        self,
+        session,
+        new_user,
+        insert_user,
+        new_refresh_token,
+        insert_refresh_token,
+        stored_refresh_token,
+    ):
+        deleted_user, kept_user = new_user(), new_user()
+        for user in (deleted_user, kept_user):
+            await insert_user(user)
+        deleted, kept = new_refresh_token(deleted_user), new_refresh_token(kept_user)
+        for token in (deleted, kept):
+            await insert_refresh_token(token)
+
+        await RefreshTokenRepository(session).delete_of_users([deleted_user.uuid])
+        await session.commit()
+
+        assert await stored_refresh_token(deleted.uuid) is None
+        assert await stored_refresh_token(kept.uuid) is not None

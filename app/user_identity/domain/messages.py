@@ -1,4 +1,5 @@
-# Texts of the domain's rule errors; the API returns them to the client as they are.
+# Texts of the domain's errors: the messages of the broken rules, which reach the
+# client as they are, and the failures an output port declares, which go to the log only.
 
 EMAIL_REQUIRED = 'Email is required.'
 EMAIL_INVALID = 'Email is invalid.'
@@ -13,3 +14,7 @@ IDENTIFIER_REQUIRED = 'must provide username and password, or a social token'
 SESSION_EXPIRED = 'Your session has expired. Please sign in again.'
 INVALID_CREDENTIALS = 'Incorrect username or password.'
 ACCOUNT_BLOCKED = 'Your account is blocked. Contact TurfBook at {phone} or {email}.'
+ACCOUNT_CLOSED = 'The account is closed and cannot be changed.'
+ACCOUNT_ALREADY_BLOCKED = 'The account is already blocked.'
+ACCOUNT_NOT_BLOCKED = 'The account is not blocked.'
+NOTICE_NOT_PUBLISHED = 'The notice could not be published.'

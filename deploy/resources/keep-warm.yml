@@ -22,7 +22,8 @@ Resources:
               - Effect: Allow
                 Action: lambda:InvokeFunction
                 Resource:
-                  Fn::GetAtt: [ApiLambdaFunction, Arn]
+                  - Fn::GetAtt: [ApiLambdaFunction, Arn]
+                  - Fn::GetAtt: [AccountsLambdaFunction, Arn]
   KeepWarmSchedule:
     Type: AWS::Scheduler::Schedule
     Properties:
@@ -33,6 +34,19 @@ Resources:
       Target:
         Arn:
           Fn::GetAtt: [ApiLambdaFunction, Arn]
+        RoleArn:
+          Fn::GetAtt: [KeepWarmRole, Arn]
+        Input: '{"keep_warm": true}'
+  KeepWarmAccountsSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: turfbook-identity-${sls:stage}-keep-warm-accounts
+      ScheduleExpression: rate(5 minutes)
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      Target:
+        Arn:
+          Fn::GetAtt: [AccountsLambdaFunction, Arn]
         RoleArn:
           Fn::GetAtt: [KeepWarmRole, Arn]
         Input: '{"keep_warm": true}'

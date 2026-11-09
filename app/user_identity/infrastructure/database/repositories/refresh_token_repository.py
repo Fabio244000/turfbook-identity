@@ -1,6 +1,7 @@
+from collections.abc import Sequence
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.user_identity.domain.entities.refresh_token import RefreshToken
@@ -41,6 +42,11 @@ class RefreshTokenRepository(RefreshTokenRepositoryPort):
 
     async def update(self, token: RefreshToken) -> None:
         await self._session.merge(self._to_model(token))
+
+    async def delete_of_users(self, user_uuids: Sequence[UUID]) -> None:
+        await self._session.execute(
+            delete(RefreshTokenModel).where(RefreshTokenModel.user_uuid.in_(user_uuids))
+        )
 
     def _to_model(self, token: RefreshToken) -> RefreshTokenModel:
         return RefreshTokenModel(

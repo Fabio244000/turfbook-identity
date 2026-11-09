@@ -10,3 +10,12 @@ extensions:
   ApiLambdaFunction:
     DependsOn:
       - MigrationTrigger
+  AccountsLambdaFunction:
+    DependsOn:
+      - MigrationTrigger
+  DailyReviewLambdaFunction:
+    DependsOn:
+      - MigrationTrigger
+  YearlyPurgeLambdaFunction:
+    DependsOn:
+      - MigrationTrigger
