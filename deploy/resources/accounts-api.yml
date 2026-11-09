@@ -1,0 +1,53 @@
+Resources:
+  AccountsHttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: turfbook-identity-${sls:stage}-accounts
+      ProtocolType: HTTP
+  AccountsHttpApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId:
+        Ref: AccountsHttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::GetAtt: [AccountsLambdaFunction, Arn]
+      PayloadFormatVersion: '2.0'
+  AccountsHttpApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId:
+        Ref: AccountsHttpApi
+      RouteKey: $default
+      Target:
+        Fn::Join:
+          - /
+          - - integrations
+            - Ref: AccountsHttpApiIntegration
+  AccountsHttpApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId:
+        Ref: AccountsHttpApi
+      StageName: $default
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 100
+        ThrottlingRateLimit: 50
+  AccountsHttpApiInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Fn::GetAtt: [AccountsLambdaFunction, Arn]
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+          - ''
+          - - arn:aws:execute-api:${aws:region}:${aws:accountId}:
+            - Ref: AccountsHttpApi
+            - /*
+Outputs:
+  AccountsHttpApiUrl:
+    Value:
+      Fn::GetAtt: [AccountsHttpApi, ApiEndpoint]

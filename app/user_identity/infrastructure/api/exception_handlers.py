@@ -2,10 +2,17 @@ import logging
 from collections.abc import Sequence
 from typing import Any
 
-from fastapi import Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.user_identity.application.exceptions import (
+    AccountAlreadyBlockedError,
+    AccountClosedError,
+    AccountNotBlockedError,
+    AccountNotFoundError,
+    ApplicationError,
+)
 from app.user_identity.domain.exceptions import (
     AccountBlockedError,
     DomainError,
@@ -15,11 +22,13 @@ from app.user_identity.domain.exceptions import (
     MissingRequiredFieldsError,
     UserAlreadyExistsError,
 )
+from app.user_identity.infrastructure.api.exceptions import NotAuthorizedError
 from app.user_identity.infrastructure.api.messages import (
     BODY_NOT_JSON,
     FIELD_INVALID,
     FIELD_LABELS,
     FIELD_REQUIRED,
+    NOT_AUTHORIZED,
     UNEXPECTED_ERROR,
     UNEXPECTED_ERROR_LOG,
     VALIDATION_FAILED,
@@ -31,6 +40,15 @@ from app.user_identity.infrastructure.api.schemas.api_response import (
 
 logger = logging.getLogger(__name__)
 
+# Errors of the use cases written since 2026-11-09 (application errors).
+APPLICATION_STATUS_MAP: dict[type[ApplicationError], int] = {
+    AccountNotFoundError: 404,
+    AccountClosedError: 409,
+    AccountAlreadyBlockedError: 409,
+    AccountNotBlockedError: 409,
+}
+
+# Errors of the use cases written before 2026-11-09 (domain errors), while they exist.
 STATUS_MAP: dict[type[DomainError], int] = {
     InvalidUserError: 422,
     MissingRequiredFieldsError: 422,
@@ -39,6 +57,9 @@ STATUS_MAP: dict[type[DomainError], int] = {
     InvalidCredentialsError: 401,
     AccountBlockedError: 403,
 }
+
+# Where a request field travels; the client knows it by its name only.
+_LOCATIONS = ('body', 'path', 'query', 'header')
 
 # Entity attribute of a rule error → its path in the request body.
 FIELD_PATHS = {
@@ -62,6 +83,21 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
     return _error(status_code, str(exc))
 
 
+async def application_exception_handler(
+    request: Request, exc: Exception
+) -> JSONResponse:
+    assert isinstance(exc, ApplicationError)
+    status_code = APPLICATION_STATUS_MAP.get(type(exc), 500)
+    if exc.causes:
+        causes = [FieldError(field=field, error=text) for field, text in exc.causes]
+        return _field_errors(status_code, causes)
+    return _error(status_code, exc.message)
+
+
+async def not_authorized_handler(request: Request, exc: Exception) -> JSONResponse:
+    return _error(401, NOT_AUTHORIZED)
+
+
 async def request_validation_handler(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, RequestValidationError)
     return _field_errors(422, [_structure_error(error) for error in exc.errors()])
@@ -75,7 +111,8 @@ async def unexpected_exception_handler(
 
 
 def _structure_error(error: dict[str, Any]) -> FieldError:
-    path = '.'.join(str(part) for part in error['loc'] if part != 'body')
+    # The client knows a field by its name, not by where it travels.
+    path = '.'.join(str(part) for part in error['loc'] if part not in _LOCATIONS)
     label = FIELD_LABELS.get(path, path)
     if error['type'] == 'json_invalid':
         return FieldError(field=path, error=BODY_NOT_JSON)
@@ -83,6 +120,15 @@ def _structure_error(error: dict[str, Any]) -> FieldError:
     if error['type'] == 'missing' or error.get('input') is None:
         return FieldError(field=path, error=FIELD_REQUIRED.format(label=label))
     return FieldError(field=path, error=FIELD_INVALID.format(label=label))
+
+
+def register_exception_handlers(app: FastAPI) -> None:
+    """Every API of the service answers its errors with the same envelope."""
+    app.add_exception_handler(ApplicationError, application_exception_handler)
+    app.add_exception_handler(DomainError, domain_exception_handler)
+    app.add_exception_handler(NotAuthorizedError, not_authorized_handler)
+    app.add_exception_handler(RequestValidationError, request_validation_handler)
+    app.add_exception_handler(Exception, unexpected_exception_handler)
 
 
 def _field_errors(status_code: int, causes: Sequence[FieldError]) -> JSONResponse:

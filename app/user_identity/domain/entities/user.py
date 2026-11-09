@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from enum import StrEnum
 from typing import Self
 from uuid import UUID, uuid4
@@ -18,6 +18,8 @@ from app.user_identity.domain.constants import (
     USERNAME_PATTERN,
 )
 from app.user_identity.domain.exceptions import (
+    DomainError,
+    DomainErrorCode,
     InvalidCellphoneError,
     InvalidEmailError,
     InvalidFieldError,
@@ -28,6 +30,9 @@ from app.user_identity.domain.exceptions import (
     MissingRequiredFieldsError,
 )
 from app.user_identity.domain.messages import (
+    ACCOUNT_ALREADY_BLOCKED,
+    ACCOUNT_CLOSED,
+    ACCOUNT_NOT_BLOCKED,
     CELLPHONE_INVALID,
     EMAIL_INVALID,
     EMAIL_REQUIRED,
@@ -116,6 +121,42 @@ class User:
 
     def record_sign_in(self) -> None:
         self.failed_attempts = 0
+
+    def block_by_turfbook(self, now: datetime) -> None:
+        """A block already running keeps its start: blocking again never restarts the
+        days before the account is closed."""
+        self._ensure_not_closed()
+        if self.status is AccountStatus.BLOCKED:
+            raise DomainError(
+                ACCOUNT_ALREADY_BLOCKED, code=DomainErrorCode.ACCOUNT_ALREADY_BLOCKED
+            )
+        self.status = AccountStatus.BLOCKED
+        self.blocked_at = now
+
+    def unblock(self) -> None:
+        self._ensure_not_closed()
+        if self.status is not AccountStatus.BLOCKED:
+            raise DomainError(
+                ACCOUNT_NOT_BLOCKED, code=DomainErrorCode.ACCOUNT_NOT_BLOCKED
+            )
+        self.status = AccountStatus.ACTIVE
+        self.failed_attempts = 0
+        self.blocked_at = None
+
+    def close_if_expired(self, now: datetime, days: int) -> bool:
+        """Closes a block that started `days` days ago or earlier (R9); says whether
+        it closed it."""
+        if self.status is not AccountStatus.BLOCKED or self.blocked_at is None:
+            return False
+        if now - self.blocked_at < timedelta(days=days):
+            return False
+        self.status = AccountStatus.CLOSED
+        self.closed_at = now
+        return True
+
+    def _ensure_not_closed(self) -> None:
+        if self.status is AccountStatus.CLOSED:
+            raise DomainError(ACCOUNT_CLOSED, code=DomainErrorCode.ACCOUNT_CLOSED)
 
     def _rule_errors(self) -> list[InvalidFieldError]:
         """Every failing field at once, so the client fixes them in one go."""

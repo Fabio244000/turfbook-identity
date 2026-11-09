@@ -1,0 +1,75 @@
+Resources:
+  DailyReviewRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: turfbook-identity-${sls:stage}-daily-review-schedule
+      PermissionsBoundary: arn:aws:iam::${aws:accountId}:policy/turfbook-lambda-boundary
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: ${aws:accountId}
+      Policies:
+        - PolicyName: invoke-daily-review
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  Fn::GetAtt: [DailyReviewLambdaFunction, Arn]
+  DailyReviewSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: turfbook-identity-${sls:stage}-daily-review
+      ScheduleExpression: ${ssm:/turfbook/identity/${sls:stage}/daily_review_schedule, 'cron(0 1 * * ? *)'}
+      ScheduleExpressionTimezone: America/Lima
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      Target:
+        Arn:
+          Fn::GetAtt: [DailyReviewLambdaFunction, Arn]
+        RoleArn:
+          Fn::GetAtt: [DailyReviewRole, Arn]
+  YearlyPurgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: turfbook-identity-${sls:stage}-yearly-purge-schedule
+      PermissionsBoundary: arn:aws:iam::${aws:accountId}:policy/turfbook-lambda-boundary
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: ${aws:accountId}
+      Policies:
+        - PolicyName: invoke-yearly-purge
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  Fn::GetAtt: [YearlyPurgeLambdaFunction, Arn]
+  YearlyPurgeSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: turfbook-identity-${sls:stage}-yearly-purge
+      ScheduleExpression: ${ssm:/turfbook/identity/${sls:stage}/yearly_purge_schedule, 'cron(0 1 31 12 ? *)'}
+      ScheduleExpressionTimezone: America/Lima
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      Target:
+        Arn:
+          Fn::GetAtt: [YearlyPurgeLambdaFunction, Arn]
+        RoleArn:
+          Fn::GetAtt: [YearlyPurgeRole, Arn]

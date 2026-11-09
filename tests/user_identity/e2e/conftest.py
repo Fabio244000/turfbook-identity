@@ -7,6 +7,7 @@ import pytest_asyncio
 from cryptography.hazmat.primitives import serialization
 from httpx import ASGITransport, AsyncClient
 
+from app.user_identity.accounts_main import app as accounts_app
 from app.user_identity.infrastructure.api.dependencies import (
     get_clock,
     get_notice_publisher,
@@ -21,6 +22,14 @@ from tests.fakes.user_identity import FakeClock, FakeNoticePublisher
 
 # Public contract: written literally so an accidental prefix/version change fails here.
 USERS_PATH = '/api/v1/users'
+ACCOUNTS_PATH = '/api/v1/accounts/{user_uuid}'
+
+
+def error_body(
+    message: str, detail: list[dict[str, str]] | None = None
+) -> dict[str, Any]:
+    """The error envelope every API answers."""
+    return {'success': False, 'message': message, 'detail': detail, 'data': None}
 
 
 def valid_user_payload(**overrides: Any) -> dict[str, Any]:
@@ -60,6 +69,25 @@ async def client(session_factory, clock, notice_publisher):
     async with AsyncClient(transport=transport, base_url='http://test') as client:
         yield client
     app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def accounts_client(session_factory, clock, notice_publisher):
+    """The accounts API (its own Lambda and API Gateway), on the same test database,
+    clock and notices as `client`; it sends TurfBook's API key."""
+    accounts_app.dependency_overrides[get_unit_of_work] = lambda: SqlAlchemyUnitOfWork(
+        session_factory
+    )
+    accounts_app.dependency_overrides[get_clock] = lambda: clock
+    accounts_app.dependency_overrides[get_notice_publisher] = lambda: notice_publisher
+    transport = ASGITransport(app=accounts_app)
+    async with AsyncClient(
+        transport=transport,
+        base_url='http://test',
+        headers={'X-Api-Key': settings.accounts_api_key},
+    ) as client:
+        yield client
+    accounts_app.dependency_overrides.clear()
 
 
 @pytest_asyncio.fixture

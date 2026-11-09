@@ -9,3 +9,5 @@ DATABASE_URL:
       DbHost: ${ssm:/turfbook/dev/db_host}
       DbPort: ${ssm:/turfbook/dev/db_port}
 NOTICES_TOPIC_ARN: ${ssm:/turfbook/notifications/dev/topic_arn}
+ACCOUNTS_API_KEY: '{{resolve:secretsmanager:turfbook/identity/dev/accounts-api-key}}'
+BLOCK_DAYS_BEFORE_CLOSE: ${ssm:/turfbook/identity/dev/block_days_before_close, '7'}

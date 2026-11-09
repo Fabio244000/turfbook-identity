@@ -1,6 +1,8 @@
+from collections.abc import Sequence
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, Select, select
+from sqlalchemy import ColumnElement, Select, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.user_identity.domain.entities.user import AccountStatus, User
@@ -24,8 +26,30 @@ class UserRepository(UserRepositoryPort):
         query = select(UserModel).where(UserModel.username == username)
         return await self._get(query.with_for_update())
 
+    async def get_by_uuid_for_update(self, user_uuid: UUID) -> User | None:
+        query = select(UserModel).where(UserModel.uuid == user_uuid)
+        return await self._get(query.with_for_update())
+
+    async def get_blocked_before(self, cutoff: datetime) -> list[User]:
+        return await self._list(
+            select(UserModel).where(
+                UserModel.status == AccountStatus.BLOCKED.value,
+                UserModel.blocked_at <= cutoff,
+            )
+        )
+
+    async def get_closed(self) -> list[User]:
+        return await self._list(
+            select(UserModel).where(UserModel.status == AccountStatus.CLOSED.value)
+        )
+
     async def update(self, user: User) -> None:
         await self._session.merge(self._to_model(user))
+
+    async def delete(self, user_uuids: Sequence[UUID]) -> None:
+        await self._session.execute(
+            delete(UserModel).where(UserModel.uuid.in_(user_uuids))
+        )
 
     async def exists_by_username(self, username: str) -> bool:
         return await self._exists(UserModel.username == username)
@@ -39,6 +63,10 @@ class UserRepository(UserRepositoryPort):
     async def _get(self, query: Select[tuple[UserModel]]) -> User | None:
         model = (await self._session.execute(query)).scalar_one_or_none()
         return self._to_entity(model) if model else None
+
+    async def _list(self, query: Select[tuple[UserModel]]) -> list[User]:
+        models = (await self._session.execute(query)).scalars()
+        return [self._to_entity(model) for model in models]
 
     async def _exists(self, condition: ColumnElement[bool]) -> bool:
         query = select(UserModel.uuid).where(condition)

@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from app.user_identity.domain.entities.user import AccountStatus, User
@@ -10,11 +10,11 @@ BLOCKED_AT = datetime(2026, 11, 5, 17, 0, tzinfo=UTC)
 BLOCKED_ON = date(2026, 11, 5)
 
 
-def _blocked(user: User) -> User:
+def _blocked(user: User, at: datetime = BLOCKED_AT) -> User:
     user.status = AccountStatus.BLOCKED
     user.failed_attempts = 5
     user.last_failed_attempt_on = BLOCKED_ON
-    user.blocked_at = BLOCKED_AT
+    user.blocked_at = at
     return user
 
 
@@ -149,3 +149,56 @@ class TestUserRepositoryUpdate:
             BLOCKED_AT,
             None,
         )
+
+
+class TestUserRepositoryAccounts:
+    async def test_gets_a_user_by_uuid_for_update(self, session, new_user, insert_user):
+        user = _blocked(new_user())
+        await insert_user(user)
+
+        found = await UserRepository(session).get_by_uuid_for_update(user.uuid)
+
+        assert found is not None
+        assert (found.uuid, _account_of(found)) == (user.uuid, _account_of(user))
+
+    async def test_finds_the_users_blocked_at_or_before_a_moment(
+        self, session, new_user, insert_user
+    ):
+        before = _blocked(new_user(), at=BLOCKED_AT - timedelta(days=1))
+        at_the_cutoff = _blocked(new_user(), at=BLOCKED_AT)
+        after = _blocked(new_user(), at=BLOCKED_AT + timedelta(seconds=1))
+        active = new_user()
+        for user in (before, at_the_cutoff, after, active):
+            await insert_user(user)
+
+        found = await UserRepository(session).get_blocked_before(BLOCKED_AT)
+
+        ours = {before.uuid, at_the_cutoff.uuid, after.uuid, active.uuid}
+        assert {user.uuid for user in found} & ours == {
+            before.uuid,
+            at_the_cutoff.uuid,
+        }
+
+    async def test_finds_the_closed_users(self, session, new_user, insert_user):
+        closed = new_user(status=AccountStatus.CLOSED, closed_at=BLOCKED_AT)
+        blocked = _blocked(new_user())
+        for user in (closed, blocked):
+            await insert_user(user)
+
+        found = await UserRepository(session).get_closed()
+
+        ours = {closed.uuid, blocked.uuid}
+        assert {user.uuid for user in found} & ours == {closed.uuid}
+
+    async def test_deletes_only_the_users_given(
+        self, session, new_user, insert_user, stored_user
+    ):
+        deleted, kept = new_user(), new_user()
+        for user in (deleted, kept):
+            await insert_user(user)
+
+        await UserRepository(session).delete([deleted.uuid])
+        await session.commit()
+
+        assert await stored_user(deleted.uuid) is None
+        assert await stored_user(kept.uuid) is not None

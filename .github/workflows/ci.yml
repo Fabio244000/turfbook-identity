@@ -37,6 +37,8 @@ jobs:
       DATABASE_URL: postgresql+psycopg://turfbook:turfbook@localhost:5432/identity
       # Settings requires it; tests never publish (fakes and a botocore Stubber).
       NOTICES_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:turfbook-notifications-ci-notices
+      # Settings requires it; a test-only value, never a real key.
+      ACCOUNTS_API_KEY: ci-accounts-api-key
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

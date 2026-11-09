@@ -5,6 +5,8 @@ UNEXPECTED_ERROR = 'An unexpected error occurred. Please try again later.'
 BODY_NOT_JSON = 'The request body is not valid JSON.'
 FIELD_REQUIRED = '{label} is required.'
 FIELD_INVALID = '{label} has an invalid value.'
+# A missing or wrong API key: it never says which.
+NOT_AUTHORIZED = 'Not authorized.'
 
 # Readable names of the request fields, for the structure errors.
 FIELD_LABELS = {
@@ -15,6 +17,8 @@ FIELD_LABELS = {
     'password': 'Password',
     'email': 'Email',
     'refresh_token': 'Refresh token',
+    'operation': 'Operation',
+    'user_uuid': 'User UUID',
 }
 
 # Log message of an error the API does not control (never with tokens or secrets).

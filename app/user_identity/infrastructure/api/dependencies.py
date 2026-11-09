@@ -1,10 +1,13 @@
+import hmac
 from datetime import timedelta, tzinfo
 from functools import cache
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
-from fastapi import Depends
+from fastapi import Depends, Security
+from fastapi.security import APIKeyHeader
 
+from app.user_identity.application.use_cases.block_account import BlockAccountUseCase
 from app.user_identity.application.use_cases.refresh_session import (
     RefreshSessionUseCase,
 )
@@ -15,13 +18,20 @@ from app.user_identity.application.use_cases.revoke_session import (
 from app.user_identity.application.use_cases.start_session import (
     StartSessionUseCase,
 )
+from app.user_identity.application.use_cases.unblock_account import (
+    UnblockAccountUseCase,
+)
 from app.user_identity.domain.entities.turfbook_contact import TurfBookContact
+from app.user_identity.domain.ports.input.block_account_port import BlockAccountPort
 from app.user_identity.domain.ports.input.refresh_session_port import (
     RefreshSessionPort,
 )
 from app.user_identity.domain.ports.input.register_user_port import RegisterUserPort
 from app.user_identity.domain.ports.input.revoke_session_port import RevokeSessionPort
 from app.user_identity.domain.ports.input.start_session_port import StartSessionPort
+from app.user_identity.domain.ports.input.unblock_account_port import (
+    UnblockAccountPort,
+)
 from app.user_identity.domain.ports.output.clock_port import ClockPort
 from app.user_identity.domain.ports.output.notice_publisher_port import (
     NoticePublisherPort,
@@ -34,6 +44,7 @@ from app.user_identity.domain.ports.output.refresh_token_generator_port import (
 )
 from app.user_identity.domain.ports.output.token_issuer_port import TokenIssuerPort
 from app.user_identity.domain.ports.output.unit_of_work_port import UnitOfWorkPort
+from app.user_identity.infrastructure.api.exceptions import NotAuthorizedError
 from app.user_identity.infrastructure.clock.system_clock import SystemClock
 from app.user_identity.infrastructure.database.session import async_session
 from app.user_identity.infrastructure.database.unit_of_work import (
@@ -176,3 +187,32 @@ def get_revoke_session_use_case(
     generator: RefreshTokenGeneratorPort = Depends(get_refresh_token_generator),
 ) -> RevokeSessionPort:
     return RevokeSessionUseCase(uow=uow, clock=clock, refresh_token_generator=generator)
+
+
+_api_key_header = APIKeyHeader(name='X-Api-Key', auto_error=False)
+
+
+def require_turfbook_api_key(api_key: str | None = Security(_api_key_header)) -> None:
+    """Only TurfBook manages accounts (S7): compared in constant time, so the answer
+    time tells nothing about the key; the key is never logged."""
+    expected = settings.accounts_api_key.encode()
+    if api_key is None or not hmac.compare_digest(api_key.encode(), expected):
+        raise NotAuthorizedError()
+
+
+def get_block_account_use_case(
+    uow: UnitOfWorkPort = Depends(get_unit_of_work),
+    clock: ClockPort = Depends(get_clock),
+    notice_publisher: NoticePublisherPort = Depends(get_notice_publisher),
+    contact: TurfBookContact = Depends(get_turfbook_contact),
+) -> BlockAccountPort:
+    return BlockAccountUseCase(uow, clock, notice_publisher, contact)
+
+
+def get_unblock_account_use_case(
+    uow: UnitOfWorkPort = Depends(get_unit_of_work),
+    clock: ClockPort = Depends(get_clock),
+    notice_publisher: NoticePublisherPort = Depends(get_notice_publisher),
+    contact: TurfBookContact = Depends(get_turfbook_contact),
+) -> UnblockAccountPort:
+    return UnblockAccountUseCase(uow, clock, notice_publisher, contact)

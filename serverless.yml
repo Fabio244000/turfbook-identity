@@ -74,7 +74,53 @@ functions:
     timeout: 30
     maximumRetryAttempts: 0
 
+  accounts:
+    handler: app.user_identity.accounts_main.handler
+    layers:
+      - Ref: PythonRequirementsLambdaLayer
+    timeout: 15
+    iam:
+      role:
+        statements:
+          - Effect: Allow
+            Action: sns:Publish
+            Resource: ${ssm:/turfbook/notifications/${sls:stage}/topic_arn}
+          - Effect: Allow
+            Action:
+              - kms:GenerateDataKey*
+              - kms:Decrypt
+            Resource: arn:aws:kms:${aws:region}:${aws:accountId}:key/${param:snsManagedKeyId}
+
+  dailyReview:
+    name: ${self:service}-${sls:stage}-daily-review
+    handler: app.user_identity.infrastructure.jobs.daily_review.handler
+    layers:
+      - Ref: PythonRequirementsLambdaLayer
+    timeout: 60
+    maximumRetryAttempts: 2
+    iam:
+      role:
+        statements:
+          - Effect: Allow
+            Action: sns:Publish
+            Resource: ${ssm:/turfbook/notifications/${sls:stage}/topic_arn}
+          - Effect: Allow
+            Action:
+              - kms:GenerateDataKey*
+              - kms:Decrypt
+            Resource: arn:aws:kms:${aws:region}:${aws:accountId}:key/${param:snsManagedKeyId}
+
+  yearlyPurge:
+    name: ${self:service}-${sls:stage}-yearly-purge
+    handler: app.user_identity.infrastructure.jobs.yearly_purge.handler
+    layers:
+      - Ref: PythonRequirementsLambdaLayer
+    timeout: 60
+    maximumRetryAttempts: 2
+
 resources:
   - ${file(./deploy/resources/http-api.yml)}
   - ${file(./deploy/resources/migrations.yml)}
   - ${file(./deploy/resources/keep-warm.yml)}
+  - ${file(./deploy/resources/accounts-api.yml)}
+  - ${file(./deploy/resources/schedules.yml)}
