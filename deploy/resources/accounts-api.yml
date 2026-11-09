@@ -44,7 +44,7 @@ Resources:
       SourceArn:
         Fn::Join:
           - ''
-          - - arn:aws:execute-api:${aws:region}:${aws:accountId}:
+          - - 'arn:aws:execute-api:${aws:region}:${aws:accountId}:'
             - Ref: AccountsHttpApi
             - /*
 Outputs:
