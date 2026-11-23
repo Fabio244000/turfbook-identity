@@ -3,8 +3,8 @@ from uuid import UUID
 
 import jwt
 
-from app.user_identity.domain.ports.output.clock_port import ClockPort
-from app.user_identity.domain.ports.output.token_issuer_port import TokenIssuerPort
+from app.user_identity.domain.ports.driven.clock_port import ClockPort
+from app.user_identity.domain.ports.driven.token_issuer_port import TokenIssuerPort
 
 # Part of the session token contract: consumers verify against these values.
 ALGORITHM = 'RS256'

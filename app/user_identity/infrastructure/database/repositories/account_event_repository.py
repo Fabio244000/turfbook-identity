@@ -10,7 +10,7 @@ from app.user_identity.domain.entities.account_event import (
     AccountEventReason,
     AccountEventType,
 )
-from app.user_identity.domain.ports.output.account_event_repository_port import (
+from app.user_identity.domain.ports.driven.account_event_repository_port import (
     AccountEventRepositoryPort,
 )
 from app.user_identity.infrastructure.database.models import AccountEventModel
@@ -53,6 +53,7 @@ class AccountEventRepository(AccountEventRepositoryPort):
             notice_id=event.notice_id,
             notice_published_at=event.notice_published_at,
             created_at=event.created_at,
+            process_uuid=event.process_uuid,
         )
 
     def _to_entity(self, model: AccountEventModel) -> AccountEvent:
@@ -65,4 +66,5 @@ class AccountEventRepository(AccountEventRepositoryPort):
             notice_id=model.notice_id,
             notice_published_at=model.notice_published_at,
             created_at=model.created_at,
+            process_uuid=model.process_uuid,
         )

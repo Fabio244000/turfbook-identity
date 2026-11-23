@@ -202,3 +202,40 @@ class TestUserRepositoryAccounts:
 
         assert await stored_user(deleted.uuid) is None
         assert await stored_user(kept.uuid) is not None
+
+
+class TestUserRepositoryEmailVerification:
+    async def test_gets_a_user_by_cellphone_for_update(
+        self, session, new_user, insert_user
+    ):
+        user = new_user()
+        await insert_user(user)
+
+        found = await UserRepository(session).get_by_cellphone_for_update(
+            user.cellphone
+        )
+
+        assert found is not None
+        assert found.uuid == user.uuid
+
+    async def test_does_not_get_a_cellphone_nobody_has(self, session, new_user):
+        found = await UserRepository(session).get_by_cellphone_for_update(
+            new_user().cellphone
+        )
+
+        assert found is None
+
+    async def test_saves_when_the_email_was_verified(
+        self, session, new_user, insert_user, stored_email_verified_at
+    ):
+        user = new_user()
+        await insert_user(user)
+        repository = UserRepository(session)
+        found = await repository.get_by_uuid(user.uuid)
+        assert found is not None
+        found.verify_email(BLOCKED_AT)
+
+        await repository.update(found)
+        await session.commit()
+
+        assert await stored_email_verified_at(user.uuid) == BLOCKED_AT

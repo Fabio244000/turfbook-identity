@@ -5,10 +5,10 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 from app.user_identity.domain.entities.refresh_token import RefreshToken
-from app.user_identity.domain.ports.output.refresh_token_generator_port import (
+from app.user_identity.domain.ports.driven.refresh_token_generator_port import (
     RefreshTokenGeneratorPort,
 )
-from app.user_identity.domain.ports.output.unit_of_work_port import UnitOfWorkPort
+from app.user_identity.domain.ports.driven.unit_of_work_port import UnitOfWorkPort
 
 
 async def issue_refresh_token(

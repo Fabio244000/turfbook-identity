@@ -2,16 +2,32 @@ import hmac
 from datetime import timedelta, tzinfo
 from functools import cache
 from typing import TYPE_CHECKING
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, Security
-from fastapi.security import APIKeyHeader
+from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
+from app.user_identity.application.ports.driving.get_security_code_port import (
+    GetSecurityCodePort,
+)
+from app.user_identity.application.ports.driving.request_email_verification_port import (
+    RequestEmailVerificationPort,
+)
+from app.user_identity.application.ports.driving.validate_email_verification_port import (
+    ValidateEmailVerificationPort,
+)
 from app.user_identity.application.use_cases.block_account import BlockAccountUseCase
+from app.user_identity.application.use_cases.get_security_code import (
+    GetSecurityCodeUseCase,
+)
 from app.user_identity.application.use_cases.refresh_session import (
     RefreshSessionUseCase,
 )
 from app.user_identity.application.use_cases.register_user import RegisterUserUseCase
+from app.user_identity.application.use_cases.request_email_verification import (
+    RequestEmailVerificationUseCase,
+)
 from app.user_identity.application.use_cases.revoke_session import (
     RevokeSessionUseCase,
 )
@@ -21,7 +37,26 @@ from app.user_identity.application.use_cases.start_session import (
 from app.user_identity.application.use_cases.unblock_account import (
     UnblockAccountUseCase,
 )
+from app.user_identity.application.use_cases.validate_email_verification import (
+    ValidateEmailVerificationUseCase,
+)
+from app.user_identity.domain.entities.security_code_rules import SecurityCodeRules
 from app.user_identity.domain.entities.turfbook_contact import TurfBookContact
+from app.user_identity.domain.ports.driven.clock_port import ClockPort
+from app.user_identity.domain.ports.driven.notice_publisher_port import (
+    NoticePublisherPort,
+)
+from app.user_identity.domain.ports.driven.password_hasher_port import (
+    PasswordHasherPort,
+)
+from app.user_identity.domain.ports.driven.refresh_token_generator_port import (
+    RefreshTokenGeneratorPort,
+)
+from app.user_identity.domain.ports.driven.security_code_generator_port import (
+    SecurityCodeGeneratorPort,
+)
+from app.user_identity.domain.ports.driven.token_issuer_port import TokenIssuerPort
+from app.user_identity.domain.ports.driven.unit_of_work_port import UnitOfWorkPort
 from app.user_identity.domain.ports.input.block_account_port import BlockAccountPort
 from app.user_identity.domain.ports.input.refresh_session_port import (
     RefreshSessionPort,
@@ -32,19 +67,10 @@ from app.user_identity.domain.ports.input.start_session_port import StartSession
 from app.user_identity.domain.ports.input.unblock_account_port import (
     UnblockAccountPort,
 )
-from app.user_identity.domain.ports.output.clock_port import ClockPort
-from app.user_identity.domain.ports.output.notice_publisher_port import (
-    NoticePublisherPort,
+from app.user_identity.infrastructure.api.exceptions import (
+    InvalidSessionTokenError,
+    NotAuthorizedError,
 )
-from app.user_identity.domain.ports.output.password_hasher_port import (
-    PasswordHasherPort,
-)
-from app.user_identity.domain.ports.output.refresh_token_generator_port import (
-    RefreshTokenGeneratorPort,
-)
-from app.user_identity.domain.ports.output.token_issuer_port import TokenIssuerPort
-from app.user_identity.domain.ports.output.unit_of_work_port import UnitOfWorkPort
-from app.user_identity.infrastructure.api.exceptions import NotAuthorizedError
 from app.user_identity.infrastructure.clock.system_clock import SystemClock
 from app.user_identity.infrastructure.database.session import async_session
 from app.user_identity.infrastructure.database.unit_of_work import (
@@ -58,8 +84,15 @@ from app.user_identity.infrastructure.security.argon2_password_hasher import (
     Argon2PasswordHasher,
 )
 from app.user_identity.infrastructure.security.jwt_token_issuer import JwtTokenIssuer
+from app.user_identity.infrastructure.security.jwt_token_verifier import (
+    JwtTokenVerifier,
+    public_key_of,
+)
 from app.user_identity.infrastructure.security.secrets_refresh_token_generator import (
     SecretsRefreshTokenGenerator,
+)
+from app.user_identity.infrastructure.security.secrets_security_code_generator import (
+    SecretsSecurityCodeGenerator,
 )
 from config.settings import settings
 
@@ -193,7 +226,7 @@ _api_key_header = APIKeyHeader(name='X-Api-Key', auto_error=False)
 
 
 def require_turfbook_api_key(api_key: str | None = Security(_api_key_header)) -> None:
-    """Only TurfBook manages accounts (S7): compared in constant time, so the answer
+    """Only TurfBook manages accounts: compared in constant time, so the answer
     time tells nothing about the key; the key is never logged."""
     expected = settings.accounts_api_key.encode()
     if api_key is None or not hmac.compare_digest(api_key.encode(), expected):
@@ -216,3 +249,86 @@ def get_unblock_account_use_case(
     contact: TurfBookContact = Depends(get_turfbook_contact),
 ) -> UnblockAccountPort:
     return UnblockAccountUseCase(uow, clock, notice_publisher, contact)
+
+
+@cache
+def _public_key() -> str:
+    """Derived once per Lambda execution environment."""
+    return public_key_of(settings.jwt_private_key)
+
+
+def get_token_verifier(clock: ClockPort = Depends(get_clock)) -> JwtTokenVerifier:
+    return JwtTokenVerifier(_public_key(), clock)
+
+
+_session_token = HTTPBearer(auto_error=False)
+
+
+def require_session_user(
+    credentials: HTTPAuthorizationCredentials | None = Security(_session_token),
+    verifier: JwtTokenVerifier = Depends(get_token_verifier),
+) -> UUID:
+    """The user of the session token; the use case never receives the token."""
+    user_uuid = verifier.user_of(credentials.credentials) if credentials else None
+    if user_uuid is None:
+        raise InvalidSessionTokenError()
+    return user_uuid
+
+
+def get_security_code_rules() -> SecurityCodeRules:
+    return SecurityCodeRules(
+        code_minutes=settings.security_code_minutes,
+        max_user_codes=settings.max_user_codes,
+        max_support_codes=settings.max_support_codes,
+        max_attempts=settings.max_code_attempts,
+        support_grace_minutes=settings.support_grace_minutes,
+    )
+
+
+def get_security_code_generator() -> SecurityCodeGeneratorPort:
+    return SecretsSecurityCodeGenerator()
+
+
+def get_request_email_verification_use_case(
+    uow: UnitOfWorkPort = Depends(get_unit_of_work),
+    clock: ClockPort = Depends(get_clock),
+    code_generator: SecurityCodeGeneratorPort = Depends(get_security_code_generator),
+    notice_publisher: NoticePublisherPort = Depends(get_notice_publisher),
+    rules: SecurityCodeRules = Depends(get_security_code_rules),
+    business_timezone: tzinfo = Depends(get_business_timezone),
+) -> RequestEmailVerificationPort:
+    return RequestEmailVerificationUseCase(
+        uow=uow,
+        clock=clock,
+        code_generator=code_generator,
+        notice_publisher=notice_publisher,
+        rules=rules,
+        business_timezone=business_timezone,
+    )
+
+
+def get_validate_email_verification_use_case(
+    uow: UnitOfWorkPort = Depends(get_unit_of_work),
+    clock: ClockPort = Depends(get_clock),
+    rules: SecurityCodeRules = Depends(get_security_code_rules),
+    business_timezone: tzinfo = Depends(get_business_timezone),
+) -> ValidateEmailVerificationPort:
+    return ValidateEmailVerificationUseCase(
+        uow=uow, clock=clock, rules=rules, business_timezone=business_timezone
+    )
+
+
+def get_get_security_code_use_case(
+    uow: UnitOfWorkPort = Depends(get_unit_of_work),
+    clock: ClockPort = Depends(get_clock),
+    code_generator: SecurityCodeGeneratorPort = Depends(get_security_code_generator),
+    rules: SecurityCodeRules = Depends(get_security_code_rules),
+    business_timezone: tzinfo = Depends(get_business_timezone),
+) -> GetSecurityCodePort:
+    return GetSecurityCodeUseCase(
+        uow=uow,
+        clock=clock,
+        code_generator=code_generator,
+        rules=rules,
+        business_timezone=business_timezone,
+    )

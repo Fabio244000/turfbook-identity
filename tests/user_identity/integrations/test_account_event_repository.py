@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from app.user_identity.domain.entities.account_event import AccountEvent
 from app.user_identity.infrastructure.database.repositories.account_event_repository import (
     AccountEventRepository,
 )
@@ -25,6 +26,7 @@ class TestAccountEventRepository:
             event.notice_id,
             None,
             REGISTERED_AT,
+            None,
         )
 
     async def test_saves_when_its_notice_was_published(
@@ -84,3 +86,45 @@ class TestAccountEventRepository:
 
         assert await stored_account_event(deleted.uuid) is None
         assert await stored_account_event(kept.uuid) is not None
+
+
+class TestAccountEventRepositorySecurityCodes:
+    async def test_adds_an_event_of_a_security_process_without_notice(
+        self, session, existing_user, new_process, insert_process, stored_account_event
+    ):
+        process = new_process(existing_user)
+        await insert_process(process)
+        process_uuid = process.uuid
+        event = AccountEvent.support_code_generated(
+            existing_user.uuid, process_uuid, REGISTERED_AT
+        )
+
+        await AccountEventRepository(session).add(event)
+        await session.commit()
+
+        assert await stored_account_event(event.uuid) == (
+            existing_user.uuid,
+            'support_code_generated',
+            'support_request',
+            'turfbook',
+            None,
+            None,
+            REGISTERED_AT,
+            process_uuid,
+        )
+
+    async def test_adds_the_email_verified_by_the_user(
+        self, session, existing_user, new_process, insert_process, stored_account_event
+    ):
+        process = new_process(existing_user)
+        await insert_process(process)
+        event = AccountEvent.email_verified(
+            existing_user.uuid, process.uuid, REGISTERED_AT
+        )
+
+        await AccountEventRepository(session).add(event)
+        await session.commit()
+
+        stored = await stored_account_event(event.uuid)
+        assert stored is not None
+        assert stored[1:4] == ('email_verified', 'security_code', 'user')

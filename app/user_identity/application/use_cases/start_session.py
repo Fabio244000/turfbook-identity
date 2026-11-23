@@ -15,19 +15,19 @@ from app.user_identity.domain.exceptions import (
     InvalidCredentialsError,
     NoticeNotPublishedError,
 )
-from app.user_identity.domain.ports.input.start_session_port import StartSessionPort
-from app.user_identity.domain.ports.output.clock_port import ClockPort
-from app.user_identity.domain.ports.output.notice_publisher_port import (
+from app.user_identity.domain.ports.driven.clock_port import ClockPort
+from app.user_identity.domain.ports.driven.notice_publisher_port import (
     NoticePublisherPort,
 )
-from app.user_identity.domain.ports.output.password_hasher_port import (
+from app.user_identity.domain.ports.driven.password_hasher_port import (
     PasswordHasherPort,
 )
-from app.user_identity.domain.ports.output.refresh_token_generator_port import (
+from app.user_identity.domain.ports.driven.refresh_token_generator_port import (
     RefreshTokenGeneratorPort,
 )
-from app.user_identity.domain.ports.output.token_issuer_port import TokenIssuerPort
-from app.user_identity.domain.ports.output.unit_of_work_port import UnitOfWorkPort
+from app.user_identity.domain.ports.driven.token_issuer_port import TokenIssuerPort
+from app.user_identity.domain.ports.driven.unit_of_work_port import UnitOfWorkPort
+from app.user_identity.domain.ports.input.start_session_port import StartSessionPort
 
 
 class StartSessionUseCase(StartSessionPort):

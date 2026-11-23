@@ -9,7 +9,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from app.user_identity.domain.entities.notice import Notice
 from app.user_identity.domain.exceptions import NoticeNotPublishedError
-from app.user_identity.domain.ports.output.notice_publisher_port import (
+from app.user_identity.domain.ports.driven.notice_publisher_port import (
     NoticePublisherPort,
 )
 from app.user_identity.infrastructure.messaging.messages import (
@@ -65,13 +65,16 @@ def _message(notice: Notice) -> dict[str, Any]:
     }
     if notice.recipient.email is not None:
         recipient['email'] = notice.recipient.email
-    return {
+    message: dict[str, Any] = {
         'notice_id': str(notice.notice_id),
         'notifiers': [notifier.value for notifier in notice.notifiers],
         'recipient': recipient,
         'subject': notice.subject,
         'body': notice.body,
     }
+    if notice.code is not None:
+        message['code'] = notice.code
+    return message
 
 
 def _reason(error: BotoCoreError | ClientError) -> str:

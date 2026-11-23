@@ -136,3 +136,46 @@ class TestSnsClient:
         client = sns_client(topic_arn, TIMEOUT_SECONDS)
 
         assert client.meta.region_name == 'eu-west-1'
+
+
+CODE_NOTICE = replace(
+    NOTICE,
+    notifiers=(Notifier.EMAIL,),
+    subject='Tu código de seguridad de TurfBook',
+    body='Hola Luis, tu código para verificar tu correo es {code}.',
+    code='482913',
+)
+
+
+class TestSnsNoticePublisherSecurityCode:
+    async def test_publishes_the_code_in_its_own_field(self):
+        client, sent = _capturing_client()
+        with Stubber(client) as stubber:
+            stubber.add_response('publish', {'MessageId': 'm-1'})
+
+            await SnsNoticePublisher(client, TOPIC_ARN).publish(CODE_NOTICE)
+
+        message = json.loads(sent['Message'])
+        assert message['code'] == '482913'
+        assert message['body'].endswith('{code}.')
+
+    async def test_a_notice_without_code_has_no_code_field(self):
+        client, sent = _capturing_client()
+        with Stubber(client) as stubber:
+            stubber.add_response('publish', {'MessageId': 'm-1'})
+
+            await SnsNoticePublisher(client, TOPIC_ARN).publish(NOTICE)
+
+        assert 'code' not in json.loads(sent['Message'])
+
+    async def test_a_failure_never_logs_the_code(self, caplog):
+        client = sns_client(TOPIC_ARN, TIMEOUT_SECONDS)
+        with Stubber(client) as stubber, caplog.at_level(logging.DEBUG):
+            stubber.add_client_error(
+                'publish', 'AuthorizationError', http_status_code=403
+            )
+
+            with pytest.raises(NoticeNotPublishedError):
+                await SnsNoticePublisher(client, TOPIC_ARN).publish(CODE_NOTICE)
+
+        assert '482913' not in caplog.text

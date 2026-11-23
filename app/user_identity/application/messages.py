@@ -30,3 +30,16 @@ ACCOUNT_CLOSED_NOTICE_BODY = (
     'que te comunicaras con TurfBook. Ya no podrás ingresar con ella. Si tienes dudas, '
     'comunícate con TurfBook al {phone} o a {email}.'
 )
+
+PROCESS_NOT_ALLOWED = 'It is not possible to start the process.'
+PROCESS_NOT_FOUND = 'The process does not exist.'
+USER_NOT_FOUND = 'The user does not exist.'
+NO_PROCESS_IN_PROGRESS = 'There is no process in progress.'
+SECURITY_CODE_NOT_SENT = 'The security code could not be sent. Try again.'
+
+SECURITY_CODE_NOTICE_SUBJECT = 'Tu código de seguridad de TurfBook'
+# `{{code}}` stays as `{code}`: notifications puts the code there.
+EMAIL_VERIFICATION_NOTICE_BODY = (
+    'Hola {name}, tu código para verificar tu correo es {{code}}. Vence en {minutes} '
+    'minutos. Si no lo pediste, ignora este mensaje.'
+)

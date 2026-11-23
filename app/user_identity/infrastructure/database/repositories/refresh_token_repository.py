@@ -5,7 +5,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.user_identity.domain.entities.refresh_token import RefreshToken
-from app.user_identity.domain.ports.output.refresh_token_repository_port import (
+from app.user_identity.domain.ports.driven.refresh_token_repository_port import (
     RefreshTokenRepositoryPort,
 )
 from app.user_identity.infrastructure.database.models import RefreshTokenModel

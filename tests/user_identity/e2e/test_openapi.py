@@ -15,6 +15,12 @@ from app.user_identity.infrastructure.api.schemas.api_response import (
     ApiErrorResponse,
     ApiResponse,
 )
+from app.user_identity.infrastructure.api.schemas.security_code_schema import (
+    CodeValidationRequest,
+    EmailVerificationData,
+    SupportSecurityCodeData,
+    SupportSecurityCodeRequest,
+)
 from app.user_identity.infrastructure.api.schemas.session_schema import (
     SessionRequest,
 )
@@ -37,37 +43,62 @@ APPS: dict[str, tuple[FastAPI, str]] = {
     'accounts': (accounts_app, 'TurfBook Accounts Service'),
 }
 
-# Every published operation (API, path, method), its request model, its success model,
-# every response code of its contract (the ticket's §5) and its security, if any.
+# Every published operation (API, path, method), its request model (None without a
+# body), its success codes and model, every response code of its contract (the ticket's
+# §5) and its security, if any.
 OPERATIONS: dict[tuple[str, str, str], dict[str, Any]] = {
     ('identity', '/api/v1/users', 'post'): {
         'request': UserRequest,
-        'success': ('201', ApiResponse[RegisterUserData]),
+        'success': ({'201'}, ApiResponse[RegisterUserData]),
         'codes': {'201', '409', '422', '500'},
     },
     ('identity', '/api/v1/sessions', 'post'): {
         'request': SessionRequest,
-        'success': ('201', ApiResponse[SessionTokensData]),
+        'success': ({'201'}, ApiResponse[SessionTokensData]),
         'codes': {'201', '401', '403', '422', '500'},
     },
     ('identity', '/api/v1/tokens', 'post'): {
         'request': RefreshTokenRequest,
-        'success': ('200', ApiResponse[SessionTokensData]),
+        'success': ({'200'}, ApiResponse[SessionTokensData]),
         'codes': {'200', '401', '422', '500'},
     },
     ('identity', '/api/v1/tokens/revoke', 'post'): {
         'request': RefreshTokenRequest,
-        'success': ('204', None),
+        'success': ({'204'}, None),
         'codes': {'204', '422', '500'},
     },
     ('accounts', '/api/v1/accounts/{user_uuid}', 'patch'): {
         'request': AccountStatusRequest,
-        'success': ('200', ApiResponse[AccountStatusData]),
+        'success': ({'200'}, ApiResponse[AccountStatusData]),
         'codes': {'200', '401', '404', '409', '422', '500'},
+        'api_key_header': 'X-Api-Key',
+    },
+    ('identity', '/api/v1/email-verifications', 'post'): {
+        'request': None,
+        'success': ({'201'}, ApiResponse[EmailVerificationData]),
+        'codes': {'201', '401', '409', '422', '500'},
+        'bearer': True,
+    },
+    (
+        'identity',
+        '/api/v1/email-verifications/{process_uuid}/validation',
+        'post',
+    ): {
+        'request': CodeValidationRequest,
+        'success': ({'200'}, ApiResponse[None]),
+        'codes': {'200', '401', '404', '409', '422', '500'},
+        'bearer': True,
+    },
+    ('accounts', '/api/v1/security-codes', 'post'): {
+        'request': SupportSecurityCodeRequest,
+        'success': ({'200', '201'}, ApiResponse[SupportSecurityCodeData]),
+        'codes': {'200', '201', '401', '404', '409', '422', '500'},
         'api_key_header': 'X-Api-Key',
     },
 }
 SECURED = [key for key, spec in OPERATIONS.items() if 'api_key_header' in spec]
+WITH_SESSION = [key for key, spec in OPERATIONS.items() if spec.get('bearer')]
+WITH_BODY = [key for key, spec in OPERATIONS.items() if spec['request'] is not None]
 
 
 def _id(key: tuple[str, str, str]) -> str:
@@ -97,8 +128,8 @@ def _examples(content: dict[str, Any]) -> list[Any]:
 
 
 def _model_of(code: str, spec: dict[str, Any]) -> type[BaseModel] | None:
-    success_code, success_model = spec['success']
-    return success_model if code == success_code else ApiErrorResponse
+    success_codes, success_model = spec['success']
+    return success_model if code in success_codes else ApiErrorResponse
 
 
 class TestOpenApi:
@@ -140,7 +171,7 @@ class TestOpenApi:
         assert operation.get('summary')
         assert operation.get('description')
 
-    @pytest.mark.parametrize('key', OPERATIONS, ids=_id)
+    @pytest.mark.parametrize('key', WITH_BODY, ids=_id)
     async def test_request_examples_are_valid_requests(self, openapis, key):
         content = _operation(openapis, key)['requestBody']['content']
 
@@ -173,3 +204,11 @@ class TestOpenApi:
             'header',
             OPERATIONS[key]['api_key_header'],
         )
+
+    @pytest.mark.parametrize('key', WITH_SESSION, ids=_id)
+    async def test_declares_the_session_token_it_needs(self, openapis, key):
+        [requirement] = _operation(openapis, key)['security']
+        [scheme_name] = requirement
+        scheme = openapis[key[0]]['components']['securitySchemes'][scheme_name]
+
+        assert (scheme['type'], scheme['scheme']) == ('http', 'bearer')

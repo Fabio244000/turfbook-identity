@@ -5,15 +5,15 @@ from app.user_identity.domain.entities.refresh_token import RefreshToken
 from app.user_identity.domain.entities.session_tokens import SessionTokens
 from app.user_identity.domain.entities.user import AccountStatus
 from app.user_identity.domain.exceptions import InvalidRefreshTokenError
+from app.user_identity.domain.ports.driven.clock_port import ClockPort
+from app.user_identity.domain.ports.driven.refresh_token_generator_port import (
+    RefreshTokenGeneratorPort,
+)
+from app.user_identity.domain.ports.driven.token_issuer_port import TokenIssuerPort
+from app.user_identity.domain.ports.driven.unit_of_work_port import UnitOfWorkPort
 from app.user_identity.domain.ports.input.refresh_session_port import (
     RefreshSessionPort,
 )
-from app.user_identity.domain.ports.output.clock_port import ClockPort
-from app.user_identity.domain.ports.output.refresh_token_generator_port import (
-    RefreshTokenGeneratorPort,
-)
-from app.user_identity.domain.ports.output.token_issuer_port import TokenIssuerPort
-from app.user_identity.domain.ports.output.unit_of_work_port import UnitOfWorkPort
 
 
 class RefreshSessionUseCase(RefreshSessionPort):

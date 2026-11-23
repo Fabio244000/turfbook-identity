@@ -1,5 +1,5 @@
 """Lambda `daily-review`: closes the accounts blocked long enough and publishes the
-notices still pending (R9). Its handler is the entry point and composition root."""
+notices still pending. Its handler is the entry point and composition root."""
 
 import asyncio
 import logging

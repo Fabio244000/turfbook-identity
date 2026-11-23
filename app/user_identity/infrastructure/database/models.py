@@ -6,8 +6,10 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -15,6 +17,13 @@ from app.user_identity.domain.entities.account_event import (
     AccountEventActor,
     AccountEventReason,
     AccountEventType,
+)
+from app.user_identity.domain.entities.security_process import (
+    CodeIssuer,
+    ProcessFailureReason,
+    SecurityCodeStatus,
+    SecurityProcessStatus,
+    SecurityProcessType,
 )
 from app.user_identity.domain.entities.user import AccountStatus
 
@@ -26,6 +35,8 @@ USERS_EMAIL_KEY = 'users_email_key'
 USERS_FACEBOOK_TOKEN_KEY = 'users_facebook_token_key'
 USERS_GMAIL_TOKEN_KEY = 'users_gmail_token_key'
 REFRESH_TOKENS_TOKEN_HASH_KEY = 'refresh_tokens_token_hash_key'
+SECURITY_CODE_LENGTH = 6
+ACCOUNT_EVENTS_PROCESS_FKEY = 'account_events_process_uuid_fkey'
 
 # Fixed lists are stored as text that only accepts their values.
 ENUM_LENGTH = 30
@@ -67,6 +78,7 @@ class UserModel(Base):
     last_failed_attempt_on: Mapped[date | None] = mapped_column()
     blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class RefreshTokenModel(Base):
@@ -107,3 +119,68 @@ class AccountEventModel(Base):
         DateTime(timezone=True)
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    process_uuid: Mapped[UUID | None] = mapped_column(
+        ForeignKey('security_processes.uuid', name=ACCOUNT_EVENTS_PROCESS_FKEY)
+    )
+
+
+class SecurityProcessModel(Base):
+    __tablename__ = 'security_processes'
+    __table_args__ = (
+        _one_of('type', SecurityProcessType, 'security_processes_type_check'),
+        _one_of('status', SecurityProcessStatus, 'security_processes_status_check'),
+        _one_of(
+            'failure_reason',
+            ProcessFailureReason,
+            'security_processes_failure_reason_check',
+        ),
+        # At most one process in progress per user and type, even with requests at once.
+        Index(
+            'security_processes_one_open_idx',
+            'user_uuid',
+            'type',
+            unique=True,
+            postgresql_where=text("status IN ('in_progress', 'validated')"),
+        ),
+    )
+
+    uuid: Mapped[UUID] = mapped_column(primary_key=True)
+    user_uuid: Mapped[UUID] = mapped_column(ForeignKey('users.uuid'), index=True)
+    type: Mapped[str] = mapped_column(String(ENUM_LENGTH))
+    status: Mapped[str] = mapped_column(String(ENUM_LENGTH))
+    user_codes: Mapped[int] = mapped_column()
+    support_codes: Mapped[int] = mapped_column()
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    failure_reason: Mapped[str | None] = mapped_column(String(ENUM_LENGTH))
+
+
+class SecurityCodeModel(Base):
+    __tablename__ = 'security_codes'
+    __table_args__ = (
+        _one_of('issued_by', CodeIssuer, 'security_codes_issued_by_check'),
+        _one_of('status', SecurityCodeStatus, 'security_codes_status_check'),
+        # Never two codes in force in a process.
+        Index(
+            'security_codes_one_active_idx',
+            'process_uuid',
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
+
+    uuid: Mapped[UUID] = mapped_column(primary_key=True)
+    process_uuid: Mapped[UUID] = mapped_column(
+        ForeignKey('security_processes.uuid'), index=True
+    )
+    # In plain text: support must read it; it lives minutes and the database is private.
+    code: Mapped[str] = mapped_column(String(SECURITY_CODE_LENGTH))
+    issued_by: Mapped[str] = mapped_column(String(ENUM_LENGTH))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    failed_attempts: Mapped[int] = mapped_column()
+    status: Mapped[str] = mapped_column(String(ENUM_LENGTH))
+
+    # Never read: the flush INSERTs the process before its codes.
+    process: Mapped[SecurityProcessModel] = relationship(lazy='raise')

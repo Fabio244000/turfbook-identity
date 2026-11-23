@@ -1,5 +1,5 @@
-"""Lambda `yearly-purge`: deletes the closed accounts with their sessions and history
-(R11). Its handler is the entry point and composition root."""
+"""Lambda `yearly-purge`: deletes the closed accounts with their sessions and history.
+Its handler is the entry point and composition root."""
 
 import asyncio
 import logging

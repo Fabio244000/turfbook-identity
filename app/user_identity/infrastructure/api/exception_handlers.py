@@ -12,6 +12,20 @@ from app.user_identity.application.exceptions import (
     AccountNotBlockedError,
     AccountNotFoundError,
     ApplicationError,
+    EmailAlreadyVerifiedError,
+    GracePeriodEndedError,
+    NoProcessInProgressError,
+    ProcessFailedError,
+    ProcessNotAllowedError,
+    ProcessNotFoundError,
+    SecurityCodeDeliveredError,
+    SecurityCodeExhaustedError,
+    SecurityCodeExpiredError,
+    SecurityCodeIncorrectError,
+    SecurityCodeLimitError,
+    SecurityCodeNotSentError,
+    SupportCodeLimitError,
+    UserNotFoundError,
 )
 from app.user_identity.domain.exceptions import (
     AccountBlockedError,
@@ -22,13 +36,17 @@ from app.user_identity.domain.exceptions import (
     MissingRequiredFieldsError,
     UserAlreadyExistsError,
 )
-from app.user_identity.infrastructure.api.exceptions import NotAuthorizedError
+from app.user_identity.infrastructure.api.exceptions import (
+    InvalidSessionTokenError,
+    NotAuthorizedError,
+)
 from app.user_identity.infrastructure.api.messages import (
     BODY_NOT_JSON,
     FIELD_INVALID,
     FIELD_LABELS,
     FIELD_REQUIRED,
     NOT_AUTHORIZED,
+    SESSION_TOKEN_INVALID,
     UNEXPECTED_ERROR,
     UNEXPECTED_ERROR_LOG,
     VALIDATION_FAILED,
@@ -46,6 +64,22 @@ APPLICATION_STATUS_MAP: dict[type[ApplicationError], int] = {
     AccountClosedError: 409,
     AccountAlreadyBlockedError: 409,
     AccountNotBlockedError: 409,
+    ProcessNotAllowedError: 422,
+    EmailAlreadyVerifiedError: 409,
+    SecurityCodeLimitError: 409,
+    ProcessFailedError: 409,
+    # The notice with the code did not go out: the contract answers it as a 500 with
+    # its own text, so the user requests the code again.
+    SecurityCodeNotSentError: 500,
+    ProcessNotFoundError: 404,
+    SecurityCodeIncorrectError: 422,
+    SecurityCodeExpiredError: 422,
+    SecurityCodeExhaustedError: 409,
+    UserNotFoundError: 404,
+    NoProcessInProgressError: 404,
+    SupportCodeLimitError: 409,
+    SecurityCodeDeliveredError: 409,
+    GracePeriodEndedError: 409,
 }
 
 # Errors of the use cases written before 2026-11-09 (domain errors), while they exist.
@@ -98,6 +132,12 @@ async def not_authorized_handler(request: Request, exc: Exception) -> JSONRespon
     return _error(401, NOT_AUTHORIZED)
 
 
+async def invalid_session_token_handler(
+    request: Request, exc: Exception
+) -> JSONResponse:
+    return _error(401, SESSION_TOKEN_INVALID)
+
+
 async def request_validation_handler(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, RequestValidationError)
     return _field_errors(422, [_structure_error(error) for error in exc.errors()])
@@ -127,6 +167,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ApplicationError, application_exception_handler)
     app.add_exception_handler(DomainError, domain_exception_handler)
     app.add_exception_handler(NotAuthorizedError, not_authorized_handler)
+    app.add_exception_handler(InvalidSessionTokenError, invalid_session_token_handler)
     app.add_exception_handler(RequestValidationError, request_validation_handler)
     app.add_exception_handler(Exception, unexpected_exception_handler)
 

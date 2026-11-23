@@ -6,14 +6,14 @@ from app.user_identity.application.notices import account_change_notice, publish
 from app.user_identity.domain.entities.account_event import AccountEvent
 from app.user_identity.domain.entities.turfbook_contact import TurfBookContact
 from app.user_identity.domain.entities.user import User
+from app.user_identity.domain.ports.driven.clock_port import ClockPort
+from app.user_identity.domain.ports.driven.notice_publisher_port import (
+    NoticePublisherPort,
+)
+from app.user_identity.domain.ports.driven.unit_of_work_port import UnitOfWorkPort
 from app.user_identity.domain.ports.input.unblock_account_port import (
     UnblockAccountPort,
 )
-from app.user_identity.domain.ports.output.clock_port import ClockPort
-from app.user_identity.domain.ports.output.notice_publisher_port import (
-    NoticePublisherPort,
-)
-from app.user_identity.domain.ports.output.unit_of_work_port import UnitOfWorkPort
 
 
 class UnblockAccountUseCase(UnblockAccountPort):

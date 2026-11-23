@@ -1,7 +1,7 @@
 from pwdlib import PasswordHash
 from pwdlib.hashers.argon2 import Argon2Hasher
 
-from app.user_identity.domain.ports.output.password_hasher_port import (
+from app.user_identity.domain.ports.driven.password_hasher_port import (
     PasswordHasherPort,
 )
 

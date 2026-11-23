@@ -53,12 +53,14 @@ class AccountsDriver:
         self.publisher = FakeNoticePublisher()
         self._generator = FakeRefreshTokenGenerator()
         self._registered = 0
+        self.cellphones: dict[UUID, str] = {}
 
     def later(self, **delta: float) -> None:
         self.clock.current += timedelta(**delta)
 
     async def register(self, username: str, first_name: str = 'luis') -> UUID:
         self._registered += 1
+        cellphone = f'+519{self._registered:08d}'
         user, _ = await RegisterUserUseCase(
             uow=self.uow,
             hasher=FakeHasher(),
@@ -69,11 +71,12 @@ class AccountsDriver:
         ).execute(
             first_name=first_name,
             last_name='huaman',
-            cellphone=f'+519{self._registered:08d}',
+            cellphone=cellphone,
             username=username,
             password=PASSWORD,
             email=f'{username}@mail.com',
         )
+        self.cellphones[user.uuid] = cellphone
         return user.uuid
 
     async def sign_in(self, username: str, password: str = PASSWORD) -> str:

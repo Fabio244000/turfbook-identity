@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from app.user_identity.domain.ports.output.clock_port import ClockPort
+from app.user_identity.domain.ports.driven.clock_port import ClockPort
 
 
 class SystemClock(ClockPort):
