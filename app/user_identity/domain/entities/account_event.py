@@ -9,23 +9,30 @@ class AccountEventType(StrEnum):
     BLOCKED = 'blocked'
     UNBLOCKED = 'unblocked'
     CLOSED = 'closed'
+    EMAIL_VERIFIED = 'email_verified'
+    SUPPORT_CODE_SHOWN = 'support_code_shown'
+    SUPPORT_CODE_GENERATED = 'support_code_generated'
 
 
 class AccountEventReason(StrEnum):
     FAILED_ATTEMPTS = 'failed_attempts'
     TURFBOOK = 'turfbook'
     INACTIVITY_7_DAYS = 'inactivity_7_days'
+    SECURITY_CODE = 'security_code'
+    SUPPORT_REQUEST = 'support_request'
 
 
 class AccountEventActor(StrEnum):
     SYSTEM = 'system'
     TURFBOOK = 'turfbook'
+    USER = 'user'
 
 
 @dataclass
 class AccountEvent:
     """Something that happened to an account. When it is told to the user, it keeps
-    the notice's id and when the notice was published (empty while pending)."""
+    the notice's id and when the notice was published (empty while pending); when it
+    happened in a security process, that process. It never keeps a security code."""
 
     user_uuid: UUID
     type: AccountEventType
@@ -34,6 +41,7 @@ class AccountEvent:
     created_at: datetime
     notice_id: UUID | None = None
     notice_published_at: datetime | None = None
+    process_uuid: UUID | None = None
     uuid: UUID = field(default_factory=uuid4)
 
     @classmethod
@@ -74,6 +82,50 @@ class AccountEvent:
             AccountEventReason.INACTIVITY_7_DAYS,
             AccountEventActor.SYSTEM,
             now,
+        )
+
+    @classmethod
+    def email_verified(cls, user_uuid: UUID, process_uuid: UUID, now: datetime) -> Self:
+        return cls(
+            user_uuid=user_uuid,
+            type=AccountEventType.EMAIL_VERIFIED,
+            reason=AccountEventReason.SECURITY_CODE,
+            actor=AccountEventActor.USER,
+            created_at=now,
+            process_uuid=process_uuid,
+        )
+
+    @classmethod
+    def support_code_shown(
+        cls, user_uuid: UUID, process_uuid: UUID, now: datetime
+    ) -> Self:
+        return cls._by_support(
+            user_uuid, AccountEventType.SUPPORT_CODE_SHOWN, process_uuid, now
+        )
+
+    @classmethod
+    def support_code_generated(
+        cls, user_uuid: UUID, process_uuid: UUID, now: datetime
+    ) -> Self:
+        return cls._by_support(
+            user_uuid, AccountEventType.SUPPORT_CODE_GENERATED, process_uuid, now
+        )
+
+    @classmethod
+    def _by_support(
+        cls,
+        user_uuid: UUID,
+        type: AccountEventType,
+        process_uuid: UUID,
+        now: datetime,
+    ) -> Self:
+        return cls(
+            user_uuid=user_uuid,
+            type=type,
+            reason=AccountEventReason.SUPPORT_REQUEST,
+            actor=AccountEventActor.TURFBOOK,
+            created_at=now,
+            process_uuid=process_uuid,
         )
 
     @classmethod

@@ -13,6 +13,7 @@ from config.settings import settings
 BEFORE_E164_CELLPHONES = '526c4e04b55e'
 BEFORE_ACCOUNT_STATE = 'bf64ac9ccdb6'
 BEFORE_TIMESTAMPTZ = '5cc507fe9ed1'
+BEFORE_EMAIL_VERIFICATION = '1faf587c3cc7'
 # Stored without zone before the migration, in UTC (how the app always wrote them).
 CREATED_AT_UTC = datetime(2026, 11, 3, 15, 0)
 UPDATED_AT_UTC = datetime(2026, 11, 3, 16, 30)
@@ -146,6 +147,30 @@ def _timestamps_across(
         engine.dispose()
 
 
+def _email_verified_at_after_upgrade() -> Any:
+    """Inserts a user at the revision before the email verification, upgrades to head
+    and returns when its email was verified; the database always ends at head,
+    without the user."""
+    config = Config(str(ALEMBIC_INIT_PATH))
+    engine = create_engine(settings.database_url)
+    user_uuid = uuid4()
+    _go_to(config, BEFORE_EMAIL_VERIFICATION)
+    try:
+        _insert_user_with_state(
+            engine, user_uuid, created_at=REGISTERED_AT, updated_at=REGISTERED_AT
+        )
+        command.upgrade(config, 'head')
+        with engine.connect() as connection:
+            return connection.execute(
+                text('SELECT email_verified_at FROM users WHERE uuid = :uuid'),
+                {'uuid': user_uuid},
+            ).scalar_one()
+    finally:
+        command.upgrade(config, 'head')
+        _delete_user(engine, user_uuid)
+        engine.dispose()
+
+
 class TestUsersMigration:
     def test_moves_stored_cellphones_to_e164(self) -> None:
         old_cellphone = f'+51 9{uuid4().int % 10**8:08d}'
@@ -181,3 +206,8 @@ class TestUsersMigration:
         )
 
         assert stored == (CREATED_AT_UTC, UPDATED_AT_UTC)
+
+    def test_existing_users_keep_their_email_not_verified(self) -> None:
+        verified_at = _email_verified_at_after_upgrade()
+
+        assert verified_at is None

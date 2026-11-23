@@ -6,7 +6,7 @@ from sqlalchemy import ColumnElement, Select, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.user_identity.domain.entities.user import AccountStatus, User
-from app.user_identity.domain.ports.output.user_repository_port import (
+from app.user_identity.domain.ports.driven.user_repository_port import (
     UserRepositoryPort,
 )
 from app.user_identity.infrastructure.database.models import UserModel
@@ -28,6 +28,10 @@ class UserRepository(UserRepositoryPort):
 
     async def get_by_uuid_for_update(self, user_uuid: UUID) -> User | None:
         query = select(UserModel).where(UserModel.uuid == user_uuid)
+        return await self._get(query.with_for_update())
+
+    async def get_by_cellphone_for_update(self, cellphone: str) -> User | None:
+        query = select(UserModel).where(UserModel.cellphone == cellphone)
         return await self._get(query.with_for_update())
 
     async def get_blocked_before(self, cutoff: datetime) -> list[User]:
@@ -90,6 +94,7 @@ class UserRepository(UserRepositoryPort):
             last_failed_attempt_on=user.last_failed_attempt_on,
             blocked_at=user.blocked_at,
             closed_at=user.closed_at,
+            email_verified_at=user.email_verified_at,
         )
 
     def _to_entity(self, model: UserModel) -> User:
@@ -111,4 +116,5 @@ class UserRepository(UserRepositoryPort):
             last_failed_attempt_on=model.last_failed_attempt_on,
             blocked_at=model.blocked_at,
             closed_at=model.closed_at,
+            email_verified_at=model.email_verified_at,
         )

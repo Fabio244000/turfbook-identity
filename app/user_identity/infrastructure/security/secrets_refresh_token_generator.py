@@ -1,7 +1,7 @@
 import hashlib
 import secrets
 
-from app.user_identity.domain.ports.output.refresh_token_generator_port import (
+from app.user_identity.domain.ports.driven.refresh_token_generator_port import (
     RefreshTokenGeneratorPort,
 )
 

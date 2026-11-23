@@ -7,13 +7,17 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
     refresh_token_bytes: int = 32
-    # Account lock (R7): failed sign-ins of one business day that block the account.
+    # Failed sign-ins of one business day that block the account.
     max_failed_attempts: int = 5
     business_timezone: str = 'America/Lima'
-    # Days an account stays blocked before the daily review closes it (R9).
     block_days_before_close: int = 7
-    # API key TurfBook sends in X-Api-Key to manage accounts (S7); never logged.
+    # Never logged.
     accounts_api_key: str
+    security_code_minutes: int = 5
+    max_user_codes: int = 3
+    max_support_codes: int = 2
+    max_code_attempts: int = 3
+    support_grace_minutes: int = 60
     # TurfBook's contact, shown in the 403 and in the notices.
     turfbook_contact_phone: str = '+51 999999998'
     turfbook_contact_email: str = 'turfbook@gmail.com'

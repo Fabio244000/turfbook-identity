@@ -1,33 +1,45 @@
 from collections.abc import Sequence
+from copy import deepcopy
 from dataclasses import replace
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
 from app.user_identity.domain.entities.account_event import AccountEvent
 from app.user_identity.domain.entities.notice import Notice
 from app.user_identity.domain.entities.refresh_token import RefreshToken
+from app.user_identity.domain.entities.security_process import (
+    SecurityProcess,
+    SecurityProcessStatus,
+    SecurityProcessType,
+)
 from app.user_identity.domain.entities.user import AccountStatus, User
 from app.user_identity.domain.exceptions import NoticeNotPublishedError
-from app.user_identity.domain.ports.output.account_event_repository_port import (
+from app.user_identity.domain.ports.driven.account_event_repository_port import (
     AccountEventRepositoryPort,
 )
-from app.user_identity.domain.ports.output.clock_port import ClockPort
-from app.user_identity.domain.ports.output.notice_publisher_port import (
+from app.user_identity.domain.ports.driven.clock_port import ClockPort
+from app.user_identity.domain.ports.driven.notice_publisher_port import (
     NoticePublisherPort,
 )
-from app.user_identity.domain.ports.output.password_hasher_port import (
+from app.user_identity.domain.ports.driven.password_hasher_port import (
     PasswordHasherPort,
 )
-from app.user_identity.domain.ports.output.refresh_token_generator_port import (
+from app.user_identity.domain.ports.driven.refresh_token_generator_port import (
     RefreshTokenGeneratorPort,
 )
-from app.user_identity.domain.ports.output.refresh_token_repository_port import (
+from app.user_identity.domain.ports.driven.refresh_token_repository_port import (
     RefreshTokenRepositoryPort,
 )
-from app.user_identity.domain.ports.output.token_issuer_port import TokenIssuerPort
-from app.user_identity.domain.ports.output.unit_of_work_port import UnitOfWorkPort
-from app.user_identity.domain.ports.output.user_repository_port import (
+from app.user_identity.domain.ports.driven.security_code_generator_port import (
+    SecurityCodeGeneratorPort,
+)
+from app.user_identity.domain.ports.driven.security_process_repository_port import (
+    SecurityProcessRepositoryPort,
+)
+from app.user_identity.domain.ports.driven.token_issuer_port import TokenIssuerPort
+from app.user_identity.domain.ports.driven.unit_of_work_port import UnitOfWorkPort
+from app.user_identity.domain.ports.driven.user_repository_port import (
     UserRepositoryPort,
 )
 
@@ -54,6 +66,10 @@ class FakeUserRepository(UserRepositoryPort):
 
     async def get_by_uuid_for_update(self, user_uuid: UUID) -> User | None:
         return await self.get_by_uuid(user_uuid)
+
+    async def get_by_cellphone_for_update(self, cellphone: str) -> User | None:
+        found = next((u for u in self.users if u.cellphone == cellphone), None)
+        return replace(found) if found else None
 
     async def get_blocked_before(self, cutoff: datetime) -> list[User]:
         return [
@@ -142,6 +158,57 @@ class FakeAccountEventRepository(AccountEventRepositoryPort):
         self.events = [e for e in self.events if e.user_uuid not in user_uuids]
 
 
+class FakeSecurityProcessRepository(SecurityProcessRepositoryPort):
+    """Stores deep copies: a process holds its codes."""
+
+    def __init__(self) -> None:
+        self.processes: list[SecurityProcess] = []
+
+    async def add(self, process: SecurityProcess) -> None:
+        self.processes.append(deepcopy(process))
+
+    async def update(self, process: SecurityProcess) -> None:
+        index = next(i for i, p in enumerate(self.processes) if p.uuid == process.uuid)
+        self.processes[index] = deepcopy(process)
+
+    async def get_by_uuid_for_update(
+        self, process_uuid: UUID
+    ) -> SecurityProcess | None:
+        found = next((p for p in self.processes if p.uuid == process_uuid), None)
+        return deepcopy(found)
+
+    async def get_open_for_update(
+        self, user_uuid: UUID, type: SecurityProcessType
+    ) -> SecurityProcess | None:
+        found = next(
+            (
+                p
+                for p in self.processes
+                if p.user_uuid == user_uuid and p.type is type and p.is_open
+            ),
+            None,
+        )
+        return deepcopy(found)
+
+    async def has_failed_since(
+        self, user_uuid: UUID, type: SecurityProcessType, since: datetime
+    ) -> bool:
+        return any(
+            p.user_uuid == user_uuid
+            and p.type is type
+            and p.status is SecurityProcessStatus.FAILED
+            and p.finished_at is not None
+            and p.finished_at >= since
+            for p in self.processes
+        )
+
+    async def delete(self, process_uuid: UUID) -> None:
+        self.processes = [p for p in self.processes if p.uuid != process_uuid]
+
+    async def delete_of_users(self, user_uuids: Sequence[UUID]) -> None:
+        self.processes = [p for p in self.processes if p.user_uuid not in user_uuids]
+
+
 class FakeUnitOfWork(UnitOfWorkPort):
     """Leaving without commit restores the last committed state, like a database
     rollback, so a test only sees what a use case actually committed. With
@@ -157,6 +224,7 @@ class FakeUnitOfWork(UnitOfWorkPort):
         self.users = FakeUserRepository(users)
         self.refresh_tokens = FakeRefreshTokenRepository(refresh_tokens)
         self.account_events = FakeAccountEventRepository(account_events)
+        self.security_processes = FakeSecurityProcessRepository()
         self.committed = False
         self.failing_commit = failing_commit
         self.commits = 0
@@ -173,11 +241,31 @@ class FakeUnitOfWork(UnitOfWorkPort):
         self.users.users = list(self._users)
         self.refresh_tokens.tokens = list(self._tokens)
         self.account_events.events = list(self._events)
+        self.security_processes.processes = list(self._processes)
+
+    def with_user(self, cellphone: str, email: str | None) -> UUID:
+        """A committed user that registration cannot create (e.g. without email)."""
+        created_at = datetime(2026, 1, 5, tzinfo=UTC)
+        user = User(
+            first_name='rosa',
+            last_name='quispe',
+            cellphone=cellphone,
+            username=None,
+            password=None,
+            email=email,
+            created_at=created_at,
+            updated_at=created_at,
+            facebook_token='facebook-token',
+        )
+        self.users.users.append(user)
+        self._save()
+        return user.uuid
 
     def _save(self) -> None:
         self._users = list(self.users.users)
         self._tokens = list(self.refresh_tokens.tokens)
         self._events = list(self.account_events.events)
+        self._processes = list(self.security_processes.processes)
 
 
 class FakeHasher(PasswordHasherPort):
@@ -215,6 +303,17 @@ class FakeRefreshTokenGenerator(RefreshTokenGeneratorPort):
         return f'hash-{token}'
 
 
+class FakeSecurityCodeGenerator(SecurityCodeGeneratorPort):
+    """Generates `100001`, `100002`…"""
+
+    def __init__(self) -> None:
+        self._count = 0
+
+    def generate(self) -> str:
+        self._count += 1
+        return f'{100000 + self._count}'
+
+
 class FakeNoticePublisher(NoticePublisherPort):
     """Keeps what it publishes. With `fails` every publication fails, as without the
     NAT (set it back to False to "create" the NAT); with `failing_recipients` only the
@@ -240,8 +339,10 @@ class FakeNoticePublisher(NoticePublisherPort):
             {
                 'notice_id': notice.notice_id,
                 'recipient': notice.recipient.uuid,
+                'notifiers': [notifier.value for notifier in notice.notifiers],
                 'subject': notice.subject,
                 'body': notice.body,
+                'code': notice.code,
             }
             for notice in self.published
         ]

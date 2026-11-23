@@ -15,6 +15,14 @@ from app.user_identity.domain.entities.account_event import (
     AccountEventType,
 )
 from app.user_identity.domain.entities.refresh_token import RefreshToken
+from app.user_identity.domain.entities.security_code_rules import SecurityCodeRules
+from app.user_identity.domain.entities.security_process import (
+    CodeIssuer,
+    SecurityCode,
+    SecurityCodeStatus,
+    SecurityProcess,
+    SecurityProcessType,
+)
 from app.user_identity.domain.entities.user import User
 
 StoredUser = tuple[Any, ...] | None
@@ -241,7 +249,7 @@ def stored_account_event(
         result = await connection.execute(
             text(
                 'SELECT user_uuid, type, reason, actor, notice_id,'
-                ' notice_published_at, created_at'
+                ' notice_published_at, created_at, process_uuid'
                 ' FROM account_events WHERE uuid = :uuid'
             ),
             {'uuid': uuid},
@@ -250,3 +258,145 @@ def stored_account_event(
         return tuple(row) if row else None
 
     return _stored_account_event
+
+
+StoredProcess = tuple[Any, ...] | None
+CODE_MINUTES = timedelta(minutes=5)
+RULES = SecurityCodeRules(
+    code_minutes=5,
+    max_user_codes=3,
+    max_support_codes=2,
+    max_attempts=3,
+    support_grace_minutes=60,
+)
+
+
+@pytest.fixture
+def new_process() -> Callable[..., SecurityProcess]:
+    """A process of `user` in progress, with one active code sent to the user."""
+
+    def _new_process(user: User, **overrides: Any) -> SecurityProcess:
+        data: dict[str, Any] = {
+            'user_uuid': user.uuid,
+            'type': SecurityProcessType.EMAIL_VERIFICATION,
+            'started_at': REGISTERED_AT,
+            'user_codes': 1,
+        }
+        data.update(overrides)
+        process = SecurityProcess(**data)
+        process.codes.append(
+            SecurityCode(
+                process_uuid=process.uuid,
+                code='482913',
+                issued_by=CodeIssuer.USER,
+                created_at=process.started_at,
+                expires_at=process.started_at + CODE_MINUTES,
+                status=SecurityCodeStatus.ACTIVE,
+            )
+        )
+        return process
+
+    return _new_process
+
+
+@pytest.fixture
+def insert_process(
+    connection: AsyncConnection,
+) -> Callable[[SecurityProcess], Awaitable[None]]:
+    async def _insert_process(process: SecurityProcess) -> None:
+        await connection.execute(
+            text(
+                'INSERT INTO security_processes (uuid, user_uuid, type, status,'
+                ' user_codes, support_codes, started_at, validated_at, finished_at,'
+                ' failure_reason) VALUES (:uuid, :user_uuid, :type, :status,'
+                ' :user_codes, :support_codes, :started_at, :validated_at,'
+                ' :finished_at, :failure_reason)'
+            ),
+            {
+                'uuid': process.uuid,
+                'user_uuid': process.user_uuid,
+                'type': process.type.value,
+                'status': process.status.value,
+                'user_codes': process.user_codes,
+                'support_codes': process.support_codes,
+                'started_at': process.started_at,
+                'validated_at': process.validated_at,
+                'finished_at': process.finished_at,
+                'failure_reason': process.failure_reason,
+            },
+        )
+        for code in process.codes:
+            await connection.execute(
+                text(
+                    'INSERT INTO security_codes (uuid, process_uuid, code,'
+                    ' issued_by, created_at, expires_at, failed_attempts, status)'
+                    ' VALUES (:uuid, :process_uuid, :code, :issued_by, :created_at,'
+                    ' :expires_at, :failed_attempts, :status)'
+                ),
+                {
+                    'uuid': code.uuid,
+                    'process_uuid': code.process_uuid,
+                    'code': code.code,
+                    'issued_by': code.issued_by.value,
+                    'created_at': code.created_at,
+                    'expires_at': code.expires_at,
+                    'failed_attempts': code.failed_attempts,
+                    'status': code.status.value,
+                },
+            )
+
+    return _insert_process
+
+
+@pytest.fixture
+def stored_process(
+    connection: AsyncConnection,
+) -> Callable[[UUID], Awaitable[StoredProcess]]:
+    async def _stored_process(uuid: UUID) -> StoredProcess:
+        result = await connection.execute(
+            text(
+                'SELECT status, user_codes, support_codes, validated_at,'
+                ' finished_at, failure_reason FROM security_processes'
+                ' WHERE uuid = :uuid'
+            ),
+            {'uuid': uuid},
+        )
+        row = result.one_or_none()
+        return tuple(row) if row else None
+
+    return _stored_process
+
+
+@pytest.fixture
+def stored_codes(
+    connection: AsyncConnection,
+) -> Callable[[UUID], Awaitable[list[tuple[Any, ...]]]]:
+    """The codes of a process, oldest first."""
+
+    async def _stored_codes(process_uuid: UUID) -> list[tuple[Any, ...]]:
+        result = await connection.execute(
+            text(
+                'SELECT code, issued_by, status, failed_attempts, expires_at'
+                ' FROM security_codes WHERE process_uuid = :uuid'
+                ' ORDER BY created_at'
+            ),
+            {'uuid': process_uuid},
+        )
+        return [tuple(row) for row in result]
+
+    return _stored_codes
+
+
+@pytest.fixture
+def stored_email_verified_at(
+    connection: AsyncConnection,
+) -> Callable[[UUID], Awaitable[datetime | None]]:
+    async def _stored_email_verified_at(uuid: UUID) -> datetime | None:
+        result = await connection.execute(
+            text('SELECT email_verified_at FROM users WHERE uuid = :uuid'),
+            {'uuid': uuid},
+        )
+        value: datetime | None = result.scalar_one()
+        return value
+
+    return _stored_email_verified_at

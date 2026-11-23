@@ -1,6 +1,7 @@
 """The notices the account sends to its user. Built only from stored data, so a
 pending notice can be built again, with the same `notice_id`, and published later."""
 
+from dataclasses import replace
 from datetime import datetime
 from uuid import UUID
 
@@ -12,6 +13,8 @@ from app.user_identity.application.messages import (
     ACCOUNT_CLOSED_NOTICE_SUBJECT,
     ACCOUNT_UNBLOCKED_NOTICE_BODY,
     ACCOUNT_UNBLOCKED_NOTICE_SUBJECT,
+    EMAIL_VERIFICATION_NOTICE_BODY,
+    SECURITY_CODE_NOTICE_SUBJECT,
 )
 from app.user_identity.domain.entities.account_event import (
     AccountEvent,
@@ -19,10 +22,11 @@ from app.user_identity.domain.entities.account_event import (
     AccountEventType,
 )
 from app.user_identity.domain.entities.notice import Notice, NoticeRecipient, Notifier
+from app.user_identity.domain.entities.security_process import SecurityCode
 from app.user_identity.domain.entities.turfbook_contact import TurfBookContact
 from app.user_identity.domain.entities.user import User
 from app.user_identity.domain.exceptions import DomainError, DomainErrorCode
-from app.user_identity.domain.ports.output.notice_publisher_port import (
+from app.user_identity.domain.ports.driven.notice_publisher_port import (
     NoticePublisherPort,
 )
 
@@ -48,6 +52,19 @@ def account_change_notice(
         name=user.first_name.title(), phone=contact.phone, email=contact.email
     )
     return _notice(user, _notice_id(event), subject, text)
+
+
+def email_verification_notice(user: User, code: SecurityCode, minutes: int) -> Notice:
+    """Only by email: the code verifies that the email is the user's. The code's
+    id is the notice's id, as each code is sent once."""
+    body = EMAIL_VERIFICATION_NOTICE_BODY.format(
+        name=user.first_name.title(), minutes=minutes
+    )
+    return replace(
+        _notice(user, code.uuid, SECURITY_CODE_NOTICE_SUBJECT, body),
+        notifiers=(Notifier.EMAIL,),
+        code=code.code,
+    )
 
 
 def notice_for_event(

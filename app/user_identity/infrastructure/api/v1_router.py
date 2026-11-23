@@ -1,5 +1,8 @@
 from fastapi import APIRouter
 
+from app.user_identity.infrastructure.api.routes.email_verifications import (
+    router as email_verifications_router,
+)
 from app.user_identity.infrastructure.api.routes.sessions import (
     router as sessions_router,
 )
@@ -12,3 +15,4 @@ router = APIRouter(prefix=API_VERSION_PREFIX)
 router.include_router(user_router)
 router.include_router(sessions_router)
 router.include_router(tokens_router)
+router.include_router(email_verifications_router)

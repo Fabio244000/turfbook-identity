@@ -26,3 +26,5 @@ class Notice:
     recipient: NoticeRecipient
     subject: str
     body: str
+    # A security code; notifications puts it where the body says `{code}`.
+    code: str | None = None

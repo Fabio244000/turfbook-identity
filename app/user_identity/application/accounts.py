@@ -13,7 +13,7 @@ from app.user_identity.application.exceptions import (
 )
 from app.user_identity.domain.entities.user import User
 from app.user_identity.domain.exceptions import DomainError, DomainErrorCode
-from app.user_identity.domain.ports.output.unit_of_work_port import UnitOfWorkPort
+from app.user_identity.domain.ports.driven.unit_of_work_port import UnitOfWorkPort
 
 # What a caller is told when the domain rejects a change of the account.
 _APPLICATION_ERRORS: dict[DomainErrorCode | None, type[ApplicationError]] = {

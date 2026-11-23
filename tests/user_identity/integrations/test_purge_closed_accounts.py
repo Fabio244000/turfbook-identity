@@ -9,7 +9,7 @@ from tests.user_identity.integrations.conftest import REGISTERED_AT
 
 
 class TestPurgeClosedAccounts:
-    """Its history can only be seen in the database (D17): with the real foreign keys,
+    """Its history can only be seen in the database: with the real foreign keys,
     a closed user cannot go while its sessions or events stay."""
 
     async def test_deletes_a_closed_account_with_its_sessions_and_history(
@@ -38,6 +38,30 @@ class TestPurgeClosedAccounts:
         assert await stored_user(closed.uuid) is None
         assert await stored_refresh_token(token.uuid) is None
         assert await stored_account_event(event.uuid) is None
+
+    async def test_deletes_the_security_processes_of_a_closed_account(
+        self,
+        session_factory,
+        new_user,
+        insert_user,
+        new_process,
+        insert_process,
+        stored_process,
+        stored_codes,
+        stored_user,
+    ):
+        closed = new_user(status=AccountStatus.CLOSED, closed_at=REGISTERED_AT)
+        await insert_user(closed)
+        process = new_process(closed)
+        await insert_process(process)
+
+        await PurgeClosedAccountsUseCase(
+            SqlAlchemyUnitOfWork(session_factory)
+        ).execute()
+
+        assert await stored_user(closed.uuid) is None
+        assert await stored_process(process.uuid) is None
+        assert await stored_codes(process.uuid) == []
 
     async def test_keeps_a_blocked_account(
         self, session_factory, new_user, insert_user, stored_user

@@ -7,6 +7,8 @@ FIELD_REQUIRED = '{label} is required.'
 FIELD_INVALID = '{label} has an invalid value.'
 # A missing or wrong API key: it never says which.
 NOT_AUTHORIZED = 'Not authorized.'
+# A missing, invalid or expired session token: it never says which.
+SESSION_TOKEN_INVALID = 'The session token is invalid.'
 
 # Readable names of the request fields, for the structure errors.
 FIELD_LABELS = {
@@ -19,6 +21,9 @@ FIELD_LABELS = {
     'refresh_token': 'Refresh token',
     'operation': 'Operation',
     'user_uuid': 'User UUID',
+    'code': 'Security code',
+    'process_uuid': 'Process UUID',
+    'process_type': 'Process type',
 }
 
 # Log message of an error the API does not control (never with tokens or secrets).

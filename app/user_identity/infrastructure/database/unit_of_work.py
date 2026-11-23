@@ -3,7 +3,7 @@ from typing import Self
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.user_identity.domain.ports.output.unit_of_work_port import UnitOfWorkPort
+from app.user_identity.domain.ports.driven.unit_of_work_port import UnitOfWorkPort
 from app.user_identity.infrastructure.database.constraint_errors import (
     to_domain_error,
 )
@@ -12,6 +12,9 @@ from app.user_identity.infrastructure.database.repositories.account_event_reposi
 )
 from app.user_identity.infrastructure.database.repositories.refresh_token_repository import (
     RefreshTokenRepository,
+)
+from app.user_identity.infrastructure.database.repositories.security_process_repository import (
+    SecurityProcessRepository,
 )
 from app.user_identity.infrastructure.database.repositories.user_repository import (
     UserRepository,
@@ -27,6 +30,7 @@ class SqlAlchemyUnitOfWork(UnitOfWorkPort):
         self.users = UserRepository(self._session)
         self.refresh_tokens = RefreshTokenRepository(self._session)
         self.account_events = AccountEventRepository(self._session)
+        self.security_processes = SecurityProcessRepository(self._session)
         return await super().__aenter__()
 
     async def __aexit__(self, *args: object) -> None:

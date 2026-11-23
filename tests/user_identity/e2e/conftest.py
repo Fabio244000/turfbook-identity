@@ -23,6 +23,9 @@ from tests.fakes.user_identity import FakeClock, FakeNoticePublisher
 # Public contract: written literally so an accidental prefix/version change fails here.
 USERS_PATH = '/api/v1/users'
 ACCOUNTS_PATH = '/api/v1/accounts/{user_uuid}'
+EMAIL_VERIFICATIONS_PATH = '/api/v1/email-verifications'
+VALIDATION_PATH = '/api/v1/email-verifications/{process_uuid}/validation'
+SECURITY_CODES_PATH = '/api/v1/security-codes'
 
 
 def error_body(
@@ -111,3 +114,8 @@ def public_key() -> str:
         )
         .decode()
     )
+
+
+def bearer(registered: dict[str, Any]) -> dict[str, str]:
+    """The session token of a registered user, as the app sends it."""
+    return {'Authorization': f'Bearer {registered["token"]}'}

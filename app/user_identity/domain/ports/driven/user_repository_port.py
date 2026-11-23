@@ -24,6 +24,11 @@ class UserRepositoryPort(ABC):
         sign-in of the same account are handled one after the other."""
 
     @abstractmethod
+    async def get_by_cellphone_for_update(self, cellphone: str) -> User | None:
+        """The user, locked until the unit of work ends, so support and the user's
+        own requests in a process are handled one after the other."""
+
+    @abstractmethod
     async def get_blocked_before(self, cutoff: datetime) -> list[User]:
         """The blocked users whose block started at `cutoff` or earlier."""
 

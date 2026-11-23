@@ -34,6 +34,7 @@ from app.user_identity.domain.messages import (
     ACCOUNT_CLOSED,
     ACCOUNT_NOT_BLOCKED,
     CELLPHONE_INVALID,
+    EMAIL_ALREADY_VERIFIED,
     EMAIL_INVALID,
     EMAIL_REQUIRED,
     FIELD_REQUIRED,
@@ -41,6 +42,7 @@ from app.user_identity.domain.messages import (
     NAME_INVALID,
     NAME_TOO_LONG,
     PASSWORD_LENGTH,
+    PROCESS_NOT_ALLOWED,
     USERNAME_INVALID,
     USERNAME_TOO_LONG,
 )
@@ -70,6 +72,7 @@ class User:
     last_failed_attempt_on: date | None = None
     blocked_at: datetime | None = None
     closed_at: datetime | None = None
+    email_verified_at: datetime | None = None
     uuid: UUID = field(default_factory=uuid4)
 
     @classmethod
@@ -144,7 +147,7 @@ class User:
         self.blocked_at = None
 
     def close_if_expired(self, now: datetime, days: int) -> bool:
-        """Closes a block that started `days` days ago or earlier (R9); says whether
+        """Closes a block that started `days` days ago or earlier; says whether
         it closed it."""
         if self.status is not AccountStatus.BLOCKED or self.blocked_at is None:
             return False
@@ -153,6 +156,21 @@ class User:
         self.status = AccountStatus.CLOSED
         self.closed_at = now
         return True
+
+    def ensure_can_verify_email(self) -> None:
+        """Only an active account with an email not verified yet."""
+        if self.email is None or self.status is not AccountStatus.ACTIVE:
+            raise DomainError(
+                PROCESS_NOT_ALLOWED, code=DomainErrorCode.PROCESS_NOT_ALLOWED
+            )
+        if self.email_verified_at is not None:
+            raise DomainError(
+                EMAIL_ALREADY_VERIFIED, code=DomainErrorCode.EMAIL_ALREADY_VERIFIED
+            )
+
+    def verify_email(self, now: datetime) -> None:
+        self.email_verified_at = now
+        self.updated_at = now
 
     def _ensure_not_closed(self) -> None:
         if self.status is AccountStatus.CLOSED:

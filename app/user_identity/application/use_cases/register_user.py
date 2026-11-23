@@ -6,16 +6,16 @@ from app.user_identity.application.sessions import issue_refresh_token
 from app.user_identity.domain.entities.session_tokens import SessionTokens
 from app.user_identity.domain.entities.user import User
 from app.user_identity.domain.exceptions import UserAlreadyExistsError
-from app.user_identity.domain.ports.input.register_user_port import RegisterUserPort
-from app.user_identity.domain.ports.output.clock_port import ClockPort
-from app.user_identity.domain.ports.output.password_hasher_port import (
+from app.user_identity.domain.ports.driven.clock_port import ClockPort
+from app.user_identity.domain.ports.driven.password_hasher_port import (
     PasswordHasherPort,
 )
-from app.user_identity.domain.ports.output.refresh_token_generator_port import (
+from app.user_identity.domain.ports.driven.refresh_token_generator_port import (
     RefreshTokenGeneratorPort,
 )
-from app.user_identity.domain.ports.output.token_issuer_port import TokenIssuerPort
-from app.user_identity.domain.ports.output.unit_of_work_port import UnitOfWorkPort
+from app.user_identity.domain.ports.driven.token_issuer_port import TokenIssuerPort
+from app.user_identity.domain.ports.driven.unit_of_work_port import UnitOfWorkPort
+from app.user_identity.domain.ports.input.register_user_port import RegisterUserPort
 
 
 class RegisterUserUseCase(RegisterUserPort):

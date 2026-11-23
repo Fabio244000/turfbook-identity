@@ -1,5 +1,5 @@
 # Texts of the domain's errors: the messages of the broken rules, which reach the
-# client as they are, and the failures an output port declares, which go to the log only.
+# client as they are, and the failures a driven port declares, which go to the log only.
 
 EMAIL_REQUIRED = 'Email is required.'
 EMAIL_INVALID = 'Email is invalid.'
@@ -18,3 +18,16 @@ ACCOUNT_CLOSED = 'The account is closed and cannot be changed.'
 ACCOUNT_ALREADY_BLOCKED = 'The account is already blocked.'
 ACCOUNT_NOT_BLOCKED = 'The account is not blocked.'
 NOTICE_NOT_PUBLISHED = 'The notice could not be published.'
+PROCESS_NOT_ALLOWED = 'It is not possible to start the process.'
+EMAIL_ALREADY_VERIFIED = 'The email is already verified.'
+SECURITY_CODE_LIMIT = 'You cannot request more security codes, try again later.'
+PROCESS_FAILED = 'Try again tomorrow.'
+PROCESS_NOT_IN_PROGRESS = 'The process does not exist.'
+SECURITY_CODE_INCORRECT = 'The security code is incorrect.'
+SECURITY_CODE_EXPIRED = 'The security code has expired.'
+SECURITY_CODE_EXHAUSTED = 'You can no longer validate the code.'
+SUPPORT_CODE_LIMIT = 'Support cannot generate more security codes.'
+SECURITY_CODE_DELIVERED = 'The security code was delivered: it cannot be replaced.'
+GRACE_PERIOD_ENDED = (
+    'The grace period has ended: support cannot generate a security code.'
+)
