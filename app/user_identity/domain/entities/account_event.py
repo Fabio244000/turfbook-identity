@@ -12,6 +12,8 @@ class AccountEventType(StrEnum):
     EMAIL_VERIFIED = 'email_verified'
     SUPPORT_CODE_SHOWN = 'support_code_shown'
     SUPPORT_CODE_GENERATED = 'support_code_generated'
+    PASSWORD_UPDATED = 'password_updated'
+    PASSWORD_RECOVERED = 'password_recovered'
 
 
 class AccountEventReason(StrEnum):
@@ -86,13 +88,24 @@ class AccountEvent:
 
     @classmethod
     def email_verified(cls, user_uuid: UUID, process_uuid: UUID, now: datetime) -> Self:
-        return cls(
-            user_uuid=user_uuid,
-            type=AccountEventType.EMAIL_VERIFIED,
-            reason=AccountEventReason.SECURITY_CODE,
-            actor=AccountEventActor.USER,
-            created_at=now,
-            process_uuid=process_uuid,
+        return cls._by_user(
+            user_uuid, AccountEventType.EMAIL_VERIFIED, process_uuid, now
+        )
+
+    @classmethod
+    def password_updated(
+        cls, user_uuid: UUID, process_uuid: UUID, now: datetime
+    ) -> Self:
+        return cls._by_user(
+            user_uuid, AccountEventType.PASSWORD_UPDATED, process_uuid, now
+        )
+
+    @classmethod
+    def password_recovered(
+        cls, user_uuid: UUID, process_uuid: UUID, now: datetime
+    ) -> Self:
+        return cls._by_user(
+            user_uuid, AccountEventType.PASSWORD_RECOVERED, process_uuid, now
         )
 
     @classmethod
@@ -109,6 +122,24 @@ class AccountEvent:
     ) -> Self:
         return cls._by_support(
             user_uuid, AccountEventType.SUPPORT_CODE_GENERATED, process_uuid, now
+        )
+
+    @classmethod
+    def _by_user(
+        cls,
+        user_uuid: UUID,
+        type: AccountEventType,
+        process_uuid: UUID,
+        now: datetime,
+    ) -> Self:
+        """A change the user made with a security code of the process."""
+        return cls(
+            user_uuid=user_uuid,
+            type=type,
+            reason=AccountEventReason.SECURITY_CODE,
+            actor=AccountEventActor.USER,
+            created_at=now,
+            process_uuid=process_uuid,
         )
 
     @classmethod

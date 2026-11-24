@@ -14,6 +14,8 @@ from app.user_identity.application.messages import (
     ACCOUNT_UNBLOCKED_NOTICE_BODY,
     ACCOUNT_UNBLOCKED_NOTICE_SUBJECT,
     EMAIL_VERIFICATION_NOTICE_BODY,
+    PASSWORD_RECOVERY_NOTICE_BODY,
+    PASSWORD_UPDATE_NOTICE_BODY,
     SECURITY_CODE_NOTICE_SUBJECT,
 )
 from app.user_identity.domain.entities.account_event import (
@@ -22,7 +24,10 @@ from app.user_identity.domain.entities.account_event import (
     AccountEventType,
 )
 from app.user_identity.domain.entities.notice import Notice, NoticeRecipient, Notifier
-from app.user_identity.domain.entities.security_process import SecurityCode
+from app.user_identity.domain.entities.security_process import (
+    SecurityCode,
+    SecurityProcessType,
+)
 from app.user_identity.domain.entities.turfbook_contact import TurfBookContact
 from app.user_identity.domain.entities.user import User
 from app.user_identity.domain.exceptions import DomainError, DomainErrorCode
@@ -67,6 +72,18 @@ def email_verification_notice(user: User, code: SecurityCode, minutes: int) -> N
     )
 
 
+def password_code_notice(
+    user: User, code: SecurityCode, minutes: int, type: SecurityProcessType
+) -> Notice:
+    """By email and SMS; the code's id is the notice's id, as each code is sent once."""
+    body = _PASSWORD_CODE_BODIES[type].format(
+        name=user.first_name.title(), minutes=minutes
+    )
+    return replace(
+        _notice(user, code.uuid, SECURITY_CODE_NOTICE_SUBJECT, body), code=code.code
+    )
+
+
 def notice_for_event(
     user: User, event: AccountEvent, contact: TurfBookContact, failed_attempts: int
 ) -> Notice:
@@ -104,6 +121,12 @@ _CHANGE_TEXTS = {
         ACCOUNT_CLOSED_NOTICE_SUBJECT,
         ACCOUNT_CLOSED_NOTICE_BODY,
     ),
+}
+
+
+_PASSWORD_CODE_BODIES = {
+    SecurityProcessType.PASSWORD_UPDATE: PASSWORD_UPDATE_NOTICE_BODY,
+    SecurityProcessType.PASSWORD_RECOVERY: PASSWORD_RECOVERY_NOTICE_BODY,
 }
 
 

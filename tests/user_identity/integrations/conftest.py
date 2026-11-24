@@ -268,6 +268,8 @@ RULES = SecurityCodeRules(
     max_support_codes=2,
     max_attempts=3,
     support_grace_minutes=60,
+    user_window_minutes=60,
+    password_deadline_minutes=5,
 )
 
 

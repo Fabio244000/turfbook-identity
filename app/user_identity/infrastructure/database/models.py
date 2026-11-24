@@ -150,6 +150,8 @@ class SecurityProcessModel(Base):
     status: Mapped[str] = mapped_column(String(ENUM_LENGTH))
     user_codes: Mapped[int] = mapped_column()
     support_codes: Mapped[int] = mapped_column()
+    # A constant, not a moment: the database's default does not break "one clock".
+    password_attempts: Mapped[int] = mapped_column(server_default=text('0'))
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

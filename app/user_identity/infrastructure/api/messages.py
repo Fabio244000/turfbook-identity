@@ -24,6 +24,9 @@ FIELD_LABELS = {
     'code': 'Security code',
     'process_uuid': 'Process UUID',
     'process_type': 'Process type',
+    'new_password': 'New password',
+    'new_password_confirmation': 'New password confirmation',
+    'current_password': 'Current password',
 }
 
 # Log message of an error the API does not control (never with tokens or secrets).

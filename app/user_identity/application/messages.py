@@ -36,10 +36,25 @@ PROCESS_NOT_FOUND = 'The process does not exist.'
 USER_NOT_FOUND = 'The user does not exist.'
 NO_PROCESS_IN_PROGRESS = 'There is no process in progress.'
 SECURITY_CODE_NOT_SENT = 'The security code could not be sent. Try again.'
+SUPPORT_PROCESS_VALIDATED = (
+    'The security code was already validated: the user must set the new password.'
+)
+RECOVERY_LIMIT = (
+    'You cannot recover your password. Contact TurfBook at {phone} or {email}.'
+)
+PASSWORD_DEADLINE_EXPIRED = 'The time to set the new password has expired.'
 
 SECURITY_CODE_NOTICE_SUBJECT = 'Tu código de seguridad de TurfBook'
 # `{{code}}` stays as `{code}`: notifications puts the code there.
 EMAIL_VERIFICATION_NOTICE_BODY = (
     'Hola {name}, tu código para verificar tu correo es {{code}}. Vence en {minutes} '
     'minutos. Si no lo pediste, ignora este mensaje.'
+)
+PASSWORD_UPDATE_NOTICE_BODY = (
+    'Hola {name}, tu código para actualizar tu contraseña es {{code}}. Vence en '
+    '{minutes} minutos. Si no lo pediste, ignora este mensaje.'
+)
+PASSWORD_RECOVERY_NOTICE_BODY = (
+    'Hola {name}, tu código para recuperar tu contraseña es {{code}}. Vence en '
+    '{minutes} minutos. Si no lo pediste, ignora este mensaje.'
 )

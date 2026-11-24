@@ -15,6 +15,13 @@ from app.user_identity.infrastructure.api.schemas.api_response import (
     ApiErrorResponse,
     ApiResponse,
 )
+from app.user_identity.infrastructure.api.schemas.password_schema import (
+    PasswordCodeData,
+    PasswordCodeRequest,
+    PasswordDeadlineData,
+    PasswordRecoveryRequest,
+    PasswordUpdateRequest,
+)
 from app.user_identity.infrastructure.api.schemas.security_code_schema import (
     CodeValidationRequest,
     EmailVerificationData,
@@ -94,6 +101,47 @@ OPERATIONS: dict[tuple[str, str, str], dict[str, Any]] = {
         'success': ({'200', '201'}, ApiResponse[SupportSecurityCodeData]),
         'codes': {'200', '201', '401', '404', '409', '422', '500'},
         'api_key_header': 'X-Api-Key',
+    },
+    ('identity', '/api/v1/password-updates', 'post'): {
+        'request': PasswordCodeRequest,
+        'success': ({'201'}, ApiResponse[PasswordCodeData]),
+        'codes': {'201', '401', '409', '422', '500'},
+        'bearer': True,
+    },
+    ('identity', '/api/v1/password-recoveries', 'post'): {
+        'request': PasswordCodeRequest,
+        'success': ({'201'}, ApiResponse[PasswordCodeData]),
+        'codes': {'201', '409', '422', '500'},
+    },
+    (
+        'identity',
+        '/api/v1/password-updates/{process_uuid}/validation',
+        'post',
+    ): {
+        'request': CodeValidationRequest,
+        'success': ({'200'}, ApiResponse[PasswordDeadlineData]),
+        'codes': {'200', '401', '404', '409', '422', '500'},
+        'bearer': True,
+    },
+    (
+        'identity',
+        '/api/v1/password-recoveries/{process_uuid}/validation',
+        'post',
+    ): {
+        'request': CodeValidationRequest,
+        'success': ({'200'}, ApiResponse[PasswordDeadlineData]),
+        'codes': {'200', '404', '409', '422', '500'},
+    },
+    ('identity', '/api/v1/password-updates/{process_uuid}/password', 'put'): {
+        'request': PasswordUpdateRequest,
+        'success': ({'200'}, ApiResponse[None]),
+        'codes': {'200', '401', '404', '409', '422', '500'},
+        'bearer': True,
+    },
+    ('identity', '/api/v1/password-recoveries/{process_uuid}/password', 'put'): {
+        'request': PasswordRecoveryRequest,
+        'success': ({'200'}, ApiResponse[None]),
+        'codes': {'200', '404', '409', '422', '500'},
     },
 }
 SECURED = [key for key, spec in OPERATIONS.items() if 'api_key_header' in spec]

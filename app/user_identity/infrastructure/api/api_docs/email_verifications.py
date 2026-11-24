@@ -45,7 +45,7 @@ REQUEST_EMAIL_VERIFICATION_DOCS: dict[str, Any] = {
     'responses': {
         201: {
             'description': (
-                'A code went to the email of the account, in the process of the day '
+                'A code went to the email of the account, in the process in progress '
                 'or in a new one; the code is never returned.'
             ),
             'content': json_content(
@@ -65,10 +65,13 @@ REQUEST_EMAIL_VERIFICATION_DOCS: dict[str, Any] = {
         },
         401: _SESSION_TOKEN_RESPONSE,
         409: error_response(
-            'The email is verified, the process already sent 3 codes, or a process '
-            'failed today.',
+            'The email is verified, the process already sent 3 codes or its 60 '
+            'minutes passed, or a process failed today.',
             verified=error_example('Email already verified', EMAIL_ALREADY_VERIFIED),
-            limit=error_example('Three codes requested', SECURITY_CODE_LIMIT),
+            limit=error_example(
+                'Three codes, or the 60 minutes of the process passed',
+                SECURITY_CODE_LIMIT,
+            ),
             failed=error_example('A process failed today', PROCESS_FAILED),
         ),
         422: error_response(

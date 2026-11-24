@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from app.user_identity.domain.entities.security_process import (
@@ -199,6 +200,100 @@ class TestSecurityProcessRepositoryQueries:
         assert failed is False
 
 
+class TestSecurityProcessRepositoryPasswords:
+    async def test_gets_a_process_without_locking_it(
+        self, session, existing_user, new_process, insert_process
+    ):
+        process = new_process(existing_user)
+        await insert_process(process)
+
+        found = await SecurityProcessRepository(session).get_by_uuid(process.uuid)
+
+        assert found == process
+
+    async def test_counts_the_processes_of_a_type_failed_since_a_moment(
+        self, session, existing_user, new_process, insert_process
+    ):
+        recovery = SecurityProcessType.PASSWORD_RECOVERY
+        for at in (LATER - timedelta(seconds=1), LATER, LATER + timedelta(days=1)):
+            await insert_process(_failed(new_process(existing_user, type=recovery), at))
+        await insert_process(_failed(new_process(existing_user), at=LATER))
+        repository = SecurityProcessRepository(session)
+
+        failed = await repository.count_failed_since(
+            existing_user.uuid, recovery, LATER
+        )
+
+        assert failed == 2
+
+    async def test_gives_when_the_last_process_of_a_type_completed(
+        self, session, existing_user, new_process, insert_process
+    ):
+        update = SecurityProcessType.PASSWORD_UPDATE
+        for at in (LATER, LATER + timedelta(days=1)):
+            await insert_process(
+                _completed(new_process(existing_user, type=update), at)
+            )
+        await insert_process(
+            _completed(new_process(existing_user), at=LATER + timedelta(days=2))
+        )
+        repository = SecurityProcessRepository(session)
+
+        last = await repository.last_completed_at(existing_user.uuid, update)
+
+        assert last == LATER + timedelta(days=1)
+
+    async def test_gives_no_moment_without_a_completed_process(
+        self, session, existing_user, new_process, insert_process
+    ):
+        update = SecurityProcessType.PASSWORD_UPDATE
+        await insert_process(_failed(new_process(existing_user, type=update), LATER))
+        repository = SecurityProcessRepository(session)
+
+        last = await repository.last_completed_at(existing_user.uuid, update)
+
+        assert last is None
+
+    async def test_saves_the_rejections_of_the_new_password(
+        self, session, connection, existing_user, new_process, insert_process
+    ):
+        process = new_process(existing_user, type=SecurityProcessType.PASSWORD_RECOVERY)
+        await insert_process(process)
+        process.status = SecurityProcessStatus.FAILED
+        process.password_attempts = 5
+        process.failure_reason = ProcessFailureReason.PASSWORD_ATTEMPTS
+        process.finished_at = LATER
+
+        await SecurityProcessRepository(session).update(process)
+        await session.commit()
+
+        row = await connection.execute(
+            text(
+                'SELECT password_attempts, failure_reason FROM security_processes'
+                ' WHERE uuid = :uuid'
+            ),
+            {'uuid': process.uuid},
+        )
+        assert tuple(row.one()) == (5, 'password_attempts')
+
+    async def test_reads_the_rejections_of_the_new_password(
+        self, session, connection, existing_user, new_process, insert_process
+    ):
+        process = new_process(existing_user)
+        await insert_process(process)
+        await connection.execute(
+            text(
+                'UPDATE security_processes SET password_attempts = 3 WHERE uuid = :uuid'
+            ),
+            {'uuid': process.uuid},
+        )
+
+        found = await SecurityProcessRepository(session).get_by_uuid(process.uuid)
+
+        assert found is not None
+        assert found.password_attempts == 3
+
+
 class TestSecurityProcessRepositoryDelete:
     async def test_deletes_a_process_with_its_codes(
         self,
@@ -261,6 +356,13 @@ class TestSecurityProcessGuarantees:
 
         with pytest.raises(IntegrityError):
             await insert_process(process)
+
+
+def _completed(process: SecurityProcess, at: datetime) -> SecurityProcess:
+    process.status = SecurityProcessStatus.COMPLETED
+    process.finished_at = at
+    process.codes[0].status = SecurityCodeStatus.USED
+    return process
 
 
 def _failed(process: SecurityProcess, at: datetime) -> SecurityProcess:

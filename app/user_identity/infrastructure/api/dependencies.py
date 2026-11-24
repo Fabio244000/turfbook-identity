@@ -8,16 +8,40 @@ from zoneinfo import ZoneInfo
 from fastapi import Depends, Security
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
+from app.user_identity.application.ports.driving.complete_password_recovery_port import (
+    CompletePasswordRecoveryPort,
+)
+from app.user_identity.application.ports.driving.complete_password_update_port import (
+    CompletePasswordUpdatePort,
+)
 from app.user_identity.application.ports.driving.get_security_code_port import (
     GetSecurityCodePort,
 )
 from app.user_identity.application.ports.driving.request_email_verification_port import (
     RequestEmailVerificationPort,
 )
+from app.user_identity.application.ports.driving.request_password_recovery_port import (
+    RequestPasswordRecoveryPort,
+)
+from app.user_identity.application.ports.driving.request_password_update_port import (
+    RequestPasswordUpdatePort,
+)
 from app.user_identity.application.ports.driving.validate_email_verification_port import (
     ValidateEmailVerificationPort,
 )
+from app.user_identity.application.ports.driving.validate_password_recovery_port import (
+    ValidatePasswordRecoveryPort,
+)
+from app.user_identity.application.ports.driving.validate_password_update_port import (
+    ValidatePasswordUpdatePort,
+)
 from app.user_identity.application.use_cases.block_account import BlockAccountUseCase
+from app.user_identity.application.use_cases.complete_password_recovery import (
+    CompletePasswordRecoveryUseCase,
+)
+from app.user_identity.application.use_cases.complete_password_update import (
+    CompletePasswordUpdateUseCase,
+)
 from app.user_identity.application.use_cases.get_security_code import (
     GetSecurityCodeUseCase,
 )
@@ -27,6 +51,12 @@ from app.user_identity.application.use_cases.refresh_session import (
 from app.user_identity.application.use_cases.register_user import RegisterUserUseCase
 from app.user_identity.application.use_cases.request_email_verification import (
     RequestEmailVerificationUseCase,
+)
+from app.user_identity.application.use_cases.request_password_recovery import (
+    RequestPasswordRecoveryUseCase,
+)
+from app.user_identity.application.use_cases.request_password_update import (
+    RequestPasswordUpdateUseCase,
 )
 from app.user_identity.application.use_cases.revoke_session import (
     RevokeSessionUseCase,
@@ -40,9 +70,21 @@ from app.user_identity.application.use_cases.unblock_account import (
 from app.user_identity.application.use_cases.validate_email_verification import (
     ValidateEmailVerificationUseCase,
 )
+from app.user_identity.application.use_cases.validate_password_recovery import (
+    ValidatePasswordRecoveryUseCase,
+)
+from app.user_identity.application.use_cases.validate_password_update import (
+    ValidatePasswordUpdateUseCase,
+)
+from app.user_identity.domain.entities.password_process_rules import (
+    PasswordProcessRules,
+)
 from app.user_identity.domain.entities.security_code_rules import SecurityCodeRules
 from app.user_identity.domain.entities.turfbook_contact import TurfBookContact
 from app.user_identity.domain.ports.driven.clock_port import ClockPort
+from app.user_identity.domain.ports.driven.minimum_duration_port import (
+    MinimumDurationPort,
+)
 from app.user_identity.domain.ports.driven.notice_publisher_port import (
     NoticePublisherPort,
 )
@@ -70,6 +112,9 @@ from app.user_identity.domain.ports.input.unblock_account_port import (
 from app.user_identity.infrastructure.api.exceptions import (
     InvalidSessionTokenError,
     NotAuthorizedError,
+)
+from app.user_identity.infrastructure.clock.asyncio_minimum_duration import (
+    AsyncioMinimumDuration,
 )
 from app.user_identity.infrastructure.clock.system_clock import SystemClock
 from app.user_identity.infrastructure.database.session import async_session
@@ -282,6 +327,8 @@ def get_security_code_rules() -> SecurityCodeRules:
         max_support_codes=settings.max_support_codes,
         max_attempts=settings.max_code_attempts,
         support_grace_minutes=settings.support_grace_minutes,
+        user_window_minutes=settings.user_window_minutes,
+        password_deadline_minutes=settings.password_deadline_minutes,
     )
 
 
@@ -330,5 +377,124 @@ def get_get_security_code_use_case(
         clock=clock,
         code_generator=code_generator,
         rules=rules,
+        business_timezone=business_timezone,
+    )
+
+
+def get_password_process_rules() -> PasswordProcessRules:
+    return PasswordProcessRules(
+        update_interval_minutes=settings.password_update_interval_minutes,
+        max_failed_recoveries_per_week=settings.max_failed_recoveries_per_week,
+        max_password_attempts=settings.max_password_attempts,
+        min_difference=settings.password_min_difference,
+    )
+
+
+def get_minimum_duration() -> MinimumDurationPort:
+    return AsyncioMinimumDuration()
+
+
+def get_request_password_update_use_case(
+    uow: UnitOfWorkPort = Depends(get_unit_of_work),
+    clock: ClockPort = Depends(get_clock),
+    code_generator: SecurityCodeGeneratorPort = Depends(get_security_code_generator),
+    notice_publisher: NoticePublisherPort = Depends(get_notice_publisher),
+    code_rules: SecurityCodeRules = Depends(get_security_code_rules),
+    password_rules: PasswordProcessRules = Depends(get_password_process_rules),
+    business_timezone: tzinfo = Depends(get_business_timezone),
+    minimum_duration: MinimumDurationPort = Depends(get_minimum_duration),
+) -> RequestPasswordUpdatePort:
+    return RequestPasswordUpdateUseCase(
+        uow=uow,
+        clock=clock,
+        code_generator=code_generator,
+        notice_publisher=notice_publisher,
+        code_rules=code_rules,
+        password_rules=password_rules,
+        business_timezone=business_timezone,
+        minimum_duration=minimum_duration,
+        request_code_min_seconds=settings.request_code_min_seconds,
+    )
+
+
+def get_request_password_recovery_use_case(
+    uow: UnitOfWorkPort = Depends(get_unit_of_work),
+    clock: ClockPort = Depends(get_clock),
+    code_generator: SecurityCodeGeneratorPort = Depends(get_security_code_generator),
+    notice_publisher: NoticePublisherPort = Depends(get_notice_publisher),
+    code_rules: SecurityCodeRules = Depends(get_security_code_rules),
+    password_rules: PasswordProcessRules = Depends(get_password_process_rules),
+    business_timezone: tzinfo = Depends(get_business_timezone),
+    minimum_duration: MinimumDurationPort = Depends(get_minimum_duration),
+    contact: TurfBookContact = Depends(get_turfbook_contact),
+) -> RequestPasswordRecoveryPort:
+    return RequestPasswordRecoveryUseCase(
+        uow=uow,
+        clock=clock,
+        code_generator=code_generator,
+        notice_publisher=notice_publisher,
+        code_rules=code_rules,
+        password_rules=password_rules,
+        business_timezone=business_timezone,
+        minimum_duration=minimum_duration,
+        request_code_min_seconds=settings.request_code_min_seconds,
+        contact=contact,
+    )
+
+
+def get_validate_password_update_use_case(
+    uow: UnitOfWorkPort = Depends(get_unit_of_work),
+    clock: ClockPort = Depends(get_clock),
+    rules: SecurityCodeRules = Depends(get_security_code_rules),
+    business_timezone: tzinfo = Depends(get_business_timezone),
+) -> ValidatePasswordUpdatePort:
+    return ValidatePasswordUpdateUseCase(
+        uow=uow, clock=clock, rules=rules, business_timezone=business_timezone
+    )
+
+
+def get_validate_password_recovery_use_case(
+    uow: UnitOfWorkPort = Depends(get_unit_of_work),
+    clock: ClockPort = Depends(get_clock),
+    rules: SecurityCodeRules = Depends(get_security_code_rules),
+    business_timezone: tzinfo = Depends(get_business_timezone),
+) -> ValidatePasswordRecoveryPort:
+    return ValidatePasswordRecoveryUseCase(
+        uow=uow, clock=clock, rules=rules, business_timezone=business_timezone
+    )
+
+
+def get_complete_password_update_use_case(
+    uow: UnitOfWorkPort = Depends(get_unit_of_work),
+    clock: ClockPort = Depends(get_clock),
+    hasher: PasswordHasherPort = Depends(get_password_hasher),
+    code_rules: SecurityCodeRules = Depends(get_security_code_rules),
+    password_rules: PasswordProcessRules = Depends(get_password_process_rules),
+    business_timezone: tzinfo = Depends(get_business_timezone),
+) -> CompletePasswordUpdatePort:
+    return CompletePasswordUpdateUseCase(
+        uow=uow,
+        clock=clock,
+        hasher=hasher,
+        code_rules=code_rules,
+        password_rules=password_rules,
+        business_timezone=business_timezone,
+    )
+
+
+def get_complete_password_recovery_use_case(
+    uow: UnitOfWorkPort = Depends(get_unit_of_work),
+    clock: ClockPort = Depends(get_clock),
+    hasher: PasswordHasherPort = Depends(get_password_hasher),
+    code_rules: SecurityCodeRules = Depends(get_security_code_rules),
+    password_rules: PasswordProcessRules = Depends(get_password_process_rules),
+    business_timezone: tzinfo = Depends(get_business_timezone),
+) -> CompletePasswordRecoveryPort:
+    return CompletePasswordRecoveryUseCase(
+        uow=uow,
+        clock=clock,
+        hasher=hasher,
+        code_rules=code_rules,
+        password_rules=password_rules,
         business_timezone=business_timezone,
     )

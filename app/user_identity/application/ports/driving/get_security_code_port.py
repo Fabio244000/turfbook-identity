@@ -10,4 +10,4 @@ class GetSecurityCodePort(ABC):
         generates one that is never sent to the user.
 
         Raises UserNotFoundError, NoProcessInProgressError, SupportCodeLimitError,
-        SecurityCodeDeliveredError or GracePeriodEndedError."""
+        SecurityCodeDeliveredError or SupportProcessValidatedError."""

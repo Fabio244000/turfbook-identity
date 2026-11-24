@@ -1,4 +1,5 @@
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
+from contextlib import asynccontextmanager
 from copy import deepcopy
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -19,6 +20,9 @@ from app.user_identity.domain.ports.driven.account_event_repository_port import 
     AccountEventRepositoryPort,
 )
 from app.user_identity.domain.ports.driven.clock_port import ClockPort
+from app.user_identity.domain.ports.driven.minimum_duration_port import (
+    MinimumDurationPort,
+)
 from app.user_identity.domain.ports.driven.notice_publisher_port import (
     NoticePublisherPort,
 )
@@ -190,17 +194,44 @@ class FakeSecurityProcessRepository(SecurityProcessRepositoryPort):
         )
         return deepcopy(found)
 
+    async def get_by_uuid(self, process_uuid: UUID) -> SecurityProcess | None:
+        return await self.get_by_uuid_for_update(process_uuid)
+
     async def has_failed_since(
         self, user_uuid: UUID, type: SecurityProcessType, since: datetime
     ) -> bool:
-        return any(
-            p.user_uuid == user_uuid
-            and p.type is type
-            and p.status is SecurityProcessStatus.FAILED
-            and p.finished_at is not None
-            and p.finished_at >= since
-            for p in self.processes
+        return await self.count_failed_since(user_uuid, type, since) > 0
+
+    async def count_failed_since(
+        self, user_uuid: UUID, type: SecurityProcessType, since: datetime
+    ) -> int:
+        return sum(
+            1
+            for p in self._of(user_uuid, type, SecurityProcessStatus.FAILED)
+            if p.finished_at is not None and p.finished_at >= since
         )
+
+    async def last_completed_at(
+        self, user_uuid: UUID, type: SecurityProcessType
+    ) -> datetime | None:
+        finished = [
+            p.finished_at
+            for p in self._of(user_uuid, type, SecurityProcessStatus.COMPLETED)
+            if p.finished_at is not None
+        ]
+        return max(finished, default=None)
+
+    def _of(
+        self,
+        user_uuid: UUID,
+        type: SecurityProcessType,
+        status: SecurityProcessStatus,
+    ) -> list[SecurityProcess]:
+        return [
+            p
+            for p in self.processes
+            if p.user_uuid == user_uuid and p.type is type and p.status is status
+        ]
 
     async def delete(self, process_uuid: UUID) -> None:
         self.processes = [p for p in self.processes if p.uuid != process_uuid]
@@ -312,6 +343,21 @@ class FakeSecurityCodeGenerator(SecurityCodeGeneratorPort):
     def generate(self) -> str:
         self._count += 1
         return f'{100000 + self._count}'
+
+
+class FakeMinimumDuration(MinimumDurationPort):
+    """Never waits: it keeps the floor of each operation it wrapped, also of one that
+    failed."""
+
+    def __init__(self) -> None:
+        self.floors: list[float] = []
+
+    @asynccontextmanager
+    async def at_least(self, seconds: float) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            self.floors.append(seconds)
 
 
 class FakeNoticePublisher(NoticePublisherPort):

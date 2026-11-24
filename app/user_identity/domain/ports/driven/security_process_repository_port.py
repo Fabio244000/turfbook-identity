@@ -34,9 +34,24 @@ class SecurityProcessRepositoryPort(ABC):
         until the unit of work ends."""
 
     @abstractmethod
+    async def get_by_uuid(self, process_uuid: UUID) -> SecurityProcess | None:
+        """The process without locking it: only to learn whose it is."""
+
+    @abstractmethod
     async def has_failed_since(
         self, user_uuid: UUID, type: SecurityProcessType, since: datetime
     ) -> bool: ...
+
+    @abstractmethod
+    async def count_failed_since(
+        self, user_uuid: UUID, type: SecurityProcessType, since: datetime
+    ) -> int: ...
+
+    @abstractmethod
+    async def last_completed_at(
+        self, user_uuid: UUID, type: SecurityProcessType
+    ) -> datetime | None:
+        """When the user's last process of that type completed, if any."""
 
     @abstractmethod
     async def delete(self, process_uuid: UUID) -> None: ...

@@ -2,10 +2,10 @@ from typing import Any
 
 from app.user_identity.application.messages import (
     NO_PROCESS_IN_PROGRESS,
+    SUPPORT_PROCESS_VALIDATED,
     USER_NOT_FOUND,
 )
 from app.user_identity.domain.messages import (
-    GRACE_PERIOD_ENDED,
     SECURITY_CODE_DELIVERED,
     SUPPORT_CODE_LIMIT,
 )
@@ -69,17 +69,20 @@ GET_SECURITY_CODE_DOCS: dict[str, Any] = {
         ),
         404: error_response(
             'No user has that cellphone, or the user has no process of that type in '
-            'progress.',
+            'progress (the grace period after its last code ended, it failed, or its '
+            'day ended).',
             no_user=error_example('Unknown cellphone', USER_NOT_FOUND),
             no_process=error_example('No process in progress', NO_PROCESS_IN_PROGRESS),
         ),
         409: error_response(
             'No code is in force and support cannot generate one: it already '
-            'generated 2, the last code spent its attempts, or the grace period after '
-            'the last code ended.',
+            'generated 2, the last code spent its attempts, or the user already '
+            'validated the code of a password process.',
             limit=error_example('Two codes generated', SUPPORT_CODE_LIMIT),
             delivered=error_example('Attempts spent', SECURITY_CODE_DELIVERED),
-            grace=error_example('Grace period ended', GRACE_PERIOD_ENDED),
+            validated=error_example(
+                'Code already validated', SUPPORT_PROCESS_VALIDATED
+            ),
         ),
         422: error_response(
             'The cellphone or the process type is out of format.',
