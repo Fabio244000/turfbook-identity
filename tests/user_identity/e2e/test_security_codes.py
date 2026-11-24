@@ -87,7 +87,7 @@ class TestGetSecurityCodeErrors:
         assert response.status_code == 404
         assert response.json() == error_body('There is no process in progress.')
 
-    async def test_rejects_a_code_after_the_grace_period(
+    async def test_finds_no_process_once_the_grace_period_ended(
         self, client, accounts_client, registered, clock
     ):
         await client.post(EMAIL_VERIFICATIONS_PATH, headers=bearer(registered))
@@ -95,10 +95,8 @@ class TestGetSecurityCodeErrors:
 
         response = await _support(accounts_client, registered['user']['cellphone'])
 
-        assert response.status_code == 409
-        assert response.json() == error_body(
-            'The grace period has ended: support cannot generate a security code.'
-        )
+        assert response.status_code == 404
+        assert response.json() == error_body('There is no process in progress.')
 
     async def test_rejects_a_missing_api_key(self, accounts_client):
         accounts_client.headers.pop('X-Api-Key')

@@ -10,6 +10,7 @@ from httpx import ASGITransport, AsyncClient
 from app.user_identity.accounts_main import app as accounts_app
 from app.user_identity.infrastructure.api.dependencies import (
     get_clock,
+    get_minimum_duration,
     get_notice_publisher,
     get_unit_of_work,
 )
@@ -18,7 +19,11 @@ from app.user_identity.infrastructure.database.unit_of_work import (
 )
 from app.user_identity.main import app
 from config.settings import settings
-from tests.fakes.user_identity import FakeClock, FakeNoticePublisher
+from tests.fakes.user_identity import (
+    FakeClock,
+    FakeMinimumDuration,
+    FakeNoticePublisher,
+)
 
 # Public contract: written literally so an accidental prefix/version change fails here.
 USERS_PATH = '/api/v1/users'
@@ -26,6 +31,10 @@ ACCOUNTS_PATH = '/api/v1/accounts/{user_uuid}'
 EMAIL_VERIFICATIONS_PATH = '/api/v1/email-verifications'
 VALIDATION_PATH = '/api/v1/email-verifications/{process_uuid}/validation'
 SECURITY_CODES_PATH = '/api/v1/security-codes'
+PASSWORD_UPDATES_PATH = '/api/v1/password-updates'
+PASSWORD_RECOVERIES_PATH = '/api/v1/password-recoveries'
+SESSIONS_PATH = '/api/v1/sessions'
+TOKENS_PATH = '/api/v1/tokens'
 
 
 def error_body(
@@ -68,6 +77,8 @@ async def client(session_factory, clock, notice_publisher):
     )
     app.dependency_overrides[get_clock] = lambda: clock
     app.dependency_overrides[get_notice_publisher] = lambda: notice_publisher
+    # The floor of a code request is proven once, with its real time (CA14).
+    app.dependency_overrides[get_minimum_duration] = FakeMinimumDuration
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url='http://test') as client:
         yield client

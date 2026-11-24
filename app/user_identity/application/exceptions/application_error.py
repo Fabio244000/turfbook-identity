@@ -1,9 +1,12 @@
 from app.user_identity.application.messages import (
     ACCOUNT_NOT_FOUND,
     NO_PROCESS_IN_PROGRESS,
+    PASSWORD_DEADLINE_EXPIRED,
     PROCESS_NOT_ALLOWED,
     PROCESS_NOT_FOUND,
+    RECOVERY_LIMIT,
     SECURITY_CODE_NOT_SENT,
+    SUPPORT_PROCESS_VALIDATED,
     USER_NOT_FOUND,
 )
 
@@ -93,5 +96,40 @@ class SecurityCodeDeliveredError(ApplicationError):
     pass
 
 
-class GracePeriodEndedError(ApplicationError):
+class SecurityCodeAlreadyValidatedError(ApplicationError):
     pass
+
+
+class SupportProcessValidatedError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(SUPPORT_PROCESS_VALIDATED)
+
+
+class PasswordUpdateIntervalError(ApplicationError):
+    pass
+
+
+class RecoveryLimitError(ApplicationError):
+    def __init__(self, phone: str, email: str) -> None:
+        super().__init__(RECOVERY_LIMIT.format(phone=phone, email=email))
+
+
+class SecurityCodeNotValidatedError(ApplicationError):
+    pass
+
+
+class PasswordDeadlineExpiredError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(PASSWORD_DEADLINE_EXPIRED)
+
+
+class PasswordAttemptsExceededError(ApplicationError):
+    pass
+
+
+class PasswordRejectedError(ApplicationError):
+    """A business rule of the new password: it counts as an attempt."""
+
+
+class InvalidNewPasswordError(ApplicationError):
+    """The format of the new password, by field: it does not count as an attempt."""

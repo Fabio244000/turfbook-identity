@@ -172,6 +172,24 @@ class User:
         self.email_verified_at = now
         self.updated_at = now
 
+    def is_identified_by(self, cellphone: str, email: str) -> bool:
+        return self.cellphone == cellphone and self.email == email.lower()
+
+    def ensure_can_change_password(self) -> None:
+        """Only an active account with credentials (username and password)."""
+        if (
+            self.status is not AccountStatus.ACTIVE
+            or self.username is None
+            or self.password is None
+        ):
+            raise DomainError(
+                PROCESS_NOT_ALLOWED, code=DomainErrorCode.PROCESS_NOT_ALLOWED
+            )
+
+    def change_password(self, password_hash: str, now: datetime) -> None:
+        self.password = password_hash
+        self.updated_at = now
+
     def _ensure_not_closed(self) -> None:
         if self.status is AccountStatus.CLOSED:
             raise DomainError(ACCOUNT_CLOSED, code=DomainErrorCode.ACCOUNT_CLOSED)

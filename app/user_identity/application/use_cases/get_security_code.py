@@ -4,6 +4,8 @@ from functools import partial
 from app.user_identity.application.dtos.outputs import SupportSecurityCode
 from app.user_identity.application.exceptions import (
     NoProcessInProgressError,
+    SecurityCodeAlreadyValidatedError,
+    SupportProcessValidatedError,
     UserNotFoundError,
 )
 from app.user_identity.application.ports.driving.get_security_code_port import (
@@ -11,7 +13,7 @@ from app.user_identity.application.ports.driving.get_security_code_port import (
 )
 from app.user_identity.application.security_processes import (
     apply_rule,
-    open_process_of_day,
+    open_process,
 )
 from app.user_identity.domain.entities.account_event import (
     AccountEvent,
@@ -52,12 +54,13 @@ class GetSecurityCodeUseCase(GetSecurityCodePort):
             user = await self._uow.users.get_by_cellphone_for_update(cellphone)
             if user is None:
                 raise UserNotFoundError()
-            process = await open_process_of_day(
+            process = await open_process(
                 self._uow,
                 user.uuid,
                 SecurityProcessType(process_type),
                 now,
                 self._business_timezone,
+                self._rules,
             )
             if process is None:
                 raise NoProcessInProgressError()
@@ -78,14 +81,18 @@ class GetSecurityCodeUseCase(GetSecurityCodePort):
                 process.user_uuid, process.uuid, now
             )
             return code, shown
-        code = apply_rule(
-            partial(
-                process.issue_support_code,
-                self._code_generator.generate(),
-                now,
-                self._rules,
+        try:
+            code = apply_rule(
+                partial(
+                    process.issue_support_code,
+                    self._code_generator.generate(),
+                    now,
+                    self._rules,
+                )
             )
-        )
+        except SecurityCodeAlreadyValidatedError as error:
+            # Support has its own text: the user, not support, sets the password.
+            raise SupportProcessValidatedError() from error
         generated = AccountEvent.support_code_generated(
             process.user_uuid, process.uuid, now
         )

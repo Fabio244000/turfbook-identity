@@ -18,6 +18,16 @@ class Settings(BaseSettings):
     max_support_codes: int = 2
     max_code_attempts: int = 3
     support_grace_minutes: int = 60
+    # The user requests and validates codes within this window of the process.
+    user_window_minutes: int = 60
+    password_deadline_minutes: int = 5
+    # 30 × 24 h, in minutes so QA can shorten it to its window.
+    password_update_interval_minutes: int = 43200
+    max_password_attempts: int = 5
+    max_failed_recoveries_per_week: int = 4
+    password_min_difference: int = 3
+    # Every code request takes at least this, so its time reveals no account.
+    request_code_min_seconds: float = 1.0
     # TurfBook's contact, shown in the 403 and in the notices.
     turfbook_contact_phone: str = '+51 999999998'
     turfbook_contact_email: str = 'turfbook@gmail.com'

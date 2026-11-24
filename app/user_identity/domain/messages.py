@@ -28,6 +28,16 @@ SECURITY_CODE_EXPIRED = 'The security code has expired.'
 SECURITY_CODE_EXHAUSTED = 'You can no longer validate the code.'
 SUPPORT_CODE_LIMIT = 'Support cannot generate more security codes.'
 SECURITY_CODE_DELIVERED = 'The security code was delivered: it cannot be replaced.'
-GRACE_PERIOD_ENDED = (
-    'The grace period has ended: support cannot generate a security code.'
+SECURITY_CODE_ALREADY_VALIDATED = (
+    'The security code was already validated. Set your new password.'
+)
+PASSWORD_UPDATE_INTERVAL = 'You can only update your password once every 30 days.'
+RECOVERY_LIMIT = 'The failed password recoveries of the week reached the limit.'
+SECURITY_CODE_NOT_VALIDATED = 'The security code has not been validated.'
+PASSWORDS_DO_NOT_MATCH = 'The passwords do not match.'
+CURRENT_PASSWORD_INCORRECT = 'The current password is incorrect.'
+PASSWORD_TOO_SIMILAR = 'The new password is too similar to the current one.'
+PASSWORD_UNCHANGED = 'The new password must be different from the current one.'
+PASSWORD_ATTEMPTS_EXCEEDED = (
+    'You have exceeded the attempts to set the password. Try again tomorrow.'
 )

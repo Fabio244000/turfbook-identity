@@ -41,8 +41,9 @@ async def request_email_verification(
     ),
 ) -> ApiResponse[EmailVerificationData]:
     """Sends a security code to the email of the account of the session: it starts
-    the email verification of the day, or goes on with it (the new code replaces the
-    previous one). The code expires in 5 minutes; at most 3 codes per process."""
+    an email verification, or goes on with the one in progress (the new code replaces
+    the previous one). The code expires in 5 minutes; at most 3 codes within the
+    first 60 minutes of the process."""
     process_uuid, code_expires_at = await use_case.execute(user_uuid)
     data = EmailVerificationData(
         process_uuid=process_uuid, code_expires_at=code_expires_at

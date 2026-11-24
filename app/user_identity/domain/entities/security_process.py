@@ -1,20 +1,27 @@
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, tzinfo
 from enum import StrEnum
-from typing import Self
+from typing import NoReturn, Self
 from uuid import UUID, uuid4
 
+from app.user_identity.domain.entities.password_process_rules import (
+    PasswordProcessRules,
+)
 from app.user_identity.domain.entities.security_code_rules import SecurityCodeRules
 from app.user_identity.domain.exceptions import DomainError, DomainErrorCode
 from app.user_identity.domain.messages import (
-    GRACE_PERIOD_ENDED,
+    PASSWORD_ATTEMPTS_EXCEEDED,
+    PASSWORD_UPDATE_INTERVAL,
     PROCESS_FAILED,
     PROCESS_NOT_IN_PROGRESS,
+    RECOVERY_LIMIT,
+    SECURITY_CODE_ALREADY_VALIDATED,
     SECURITY_CODE_DELIVERED,
     SECURITY_CODE_EXHAUSTED,
     SECURITY_CODE_EXPIRED,
     SECURITY_CODE_INCORRECT,
     SECURITY_CODE_LIMIT,
+    SECURITY_CODE_NOT_VALIDATED,
     SUPPORT_CODE_LIMIT,
 )
 
@@ -37,6 +44,7 @@ class SecurityProcessStatus(StrEnum):
 class ProcessFailureReason(StrEnum):
     ATTEMPTS = 'attempts'
     DEADLINE = 'deadline'
+    PASSWORD_ATTEMPTS = 'password_attempts'
 
 
 class CodeIssuer(StrEnum):
@@ -75,8 +83,10 @@ class SecurityCode:
 
 @dataclass
 class SecurityProcess:
-    """A credential process of a user, with its security codes. It lives until the
-    midnight (business time zone) of the day it started."""
+    """A credential process of a user, with its security codes. The user requests and
+    validates codes within a window; then only support may generate one, within its
+    grace. It closes when nothing is left in force for it, or at the midnight
+    (business time zone) of the day it started, whichever comes first."""
 
     user_uuid: UUID
     type: SecurityProcessType
@@ -84,6 +94,8 @@ class SecurityProcess:
     status: SecurityProcessStatus = SecurityProcessStatus.IN_PROGRESS
     user_codes: int = 0
     support_codes: int = 0
+    # Business rejections of the new password, once the code was validated.
+    password_attempts: int = 0
     validated_at: datetime | None = None
     finished_at: datetime | None = None
     failure_reason: ProcessFailureReason | None = None
@@ -104,6 +116,42 @@ class SecurityProcess:
             raise DomainError(PROCESS_FAILED, code=DomainErrorCode.PROCESS_FAILED)
         return cls(user_uuid=user_uuid, type=type, started_at=now)
 
+    @classmethod
+    def start_password_update(
+        cls,
+        user_uuid: UUID,
+        now: datetime,
+        failed_today: bool,
+        last_update_at: datetime | None,
+        rules: PasswordProcessRules,
+    ) -> Self:
+        """The interval since the last successful update is checked before the
+        failure of today, so an update of today answers with the interval."""
+        interval = timedelta(minutes=rules.update_interval_minutes)
+        if last_update_at is not None and now - last_update_at < interval:
+            raise DomainError(
+                PASSWORD_UPDATE_INTERVAL, code=DomainErrorCode.PASSWORD_UPDATE_INTERVAL
+            )
+        return cls.start(
+            user_uuid, SecurityProcessType.PASSWORD_UPDATE, now, failed_today
+        )
+
+    @classmethod
+    def start_password_recovery(
+        cls,
+        user_uuid: UUID,
+        now: datetime,
+        failed_today: bool,
+        failed_this_week: int,
+        rules: PasswordProcessRules,
+    ) -> Self:
+        """The failed recoveries of the week are checked before the failure of today."""
+        if failed_this_week >= rules.max_failed_recoveries_per_week:
+            raise DomainError(RECOVERY_LIMIT, code=DomainErrorCode.RECOVERY_LIMIT)
+        return cls.start(
+            user_uuid, SecurityProcessType.PASSWORD_RECOVERY, now, failed_today
+        )
+
     @property
     def is_open(self) -> bool:
         return self.status in (
@@ -118,22 +166,65 @@ class SecurityProcess:
     def is_of_day(self, now: datetime, zone: tzinfo) -> bool:
         return _day(now, zone) == _day(self.started_at, zone)
 
-    def close_if_day_ended(self, now: datetime, zone: tzinfo) -> bool:
-        """An open process of a previous day becomes incomplete at the midnight that
-        ended its day; says whether it closed it."""
-        if not self.is_open or self.is_of_day(now, zone):
+    def close_if_ended(
+        self, now: datetime, zone: tzinfo, rules: SecurityCodeRules
+    ) -> bool:
+        """Closes an open process at the first of: the deadline of a validated one
+        (it fails), the moment nothing is left in force for it (incomplete) or the
+        midnight that ended its day (incomplete); says whether it closed it."""
+        if not self.is_open:
             return False
-        self.status = SecurityProcessStatus.INCOMPLETE
-        self.finished_at = _midnight(
-            _day(self.started_at, zone) + timedelta(days=1), zone
-        )
+        end, status = self._end(zone, rules)
+        if now < end:
+            return False
+        self.status = status
+        self.finished_at = end
+        if status is SecurityProcessStatus.FAILED:
+            self.failure_reason = ProcessFailureReason.DEADLINE
         return True
+
+    def password_deadline(self, rules: SecurityCodeRules) -> datetime:
+        if self.validated_at is None:
+            raise ValueError('the process was not validated')
+        return self.validated_at + timedelta(minutes=rules.password_deadline_minutes)
+
+    def ensure_may_set_password(self) -> None:
+        if self.status is SecurityProcessStatus.FAILED:
+            raise DomainError(PROCESS_FAILED, code=DomainErrorCode.PROCESS_FAILED)
+        if self.status is SecurityProcessStatus.IN_PROGRESS:
+            raise DomainError(
+                SECURITY_CODE_NOT_VALIDATED,
+                code=DomainErrorCode.SECURITY_CODE_NOT_VALIDATED,
+            )
+        if self.status is not SecurityProcessStatus.VALIDATED:
+            raise DomainError(
+                PROCESS_NOT_IN_PROGRESS, code=DomainErrorCode.PROCESS_NOT_IN_PROGRESS
+            )
+
+    def reject_password(
+        self, rejection: DomainError, now: datetime, rules: PasswordProcessRules
+    ) -> NoReturn:
+        """Counts a business rejection of the new password; the last one allowed
+        fails the process."""
+        self.password_attempts += 1
+        if self.password_attempts >= rules.max_password_attempts:
+            self._fail(now, ProcessFailureReason.PASSWORD_ATTEMPTS)
+            raise DomainError(
+                PASSWORD_ATTEMPTS_EXCEEDED,
+                code=DomainErrorCode.PASSWORD_ATTEMPTS_EXCEEDED,
+            )
+        raise rejection
 
     def issue_user_code(
         self, code: str, now: datetime, rules: SecurityCodeRules
     ) -> SecurityCode:
         """A pending code: the active one keeps working until this one is sent. The
         pending codes count for the limit, so concurrent requests never exceed it."""
+        self._ensure_not_validated()
+        if now >= self._window_end(rules):
+            raise DomainError(
+                SECURITY_CODE_LIMIT, code=DomainErrorCode.SECURITY_CODE_LIMIT
+            )
         requested = self.user_codes + len(self._codes(SecurityCodeStatus.PENDING))
         if requested >= rules.max_user_codes:
             raise DomainError(
@@ -164,6 +255,7 @@ class SecurityProcess:
         self, code: str, now: datetime, rules: SecurityCodeRules
     ) -> SecurityCode:
         """An active code generated by TurfBook, never sent to the user."""
+        self._ensure_not_validated()
         self._ensure_support_may_generate(now, rules)
         self._replace_active()
         self.support_codes += 1
@@ -186,6 +278,58 @@ class SecurityProcess:
         self.status = SecurityProcessStatus.COMPLETED
         self.finished_at = now
 
+    def _end(
+        self, zone: tzinfo, rules: SecurityCodeRules
+    ) -> tuple[datetime, SecurityProcessStatus]:
+        """When the open process closes, and how."""
+        midnight = _midnight(_day(self.started_at, zone) + timedelta(days=1), zone)
+        if self.status is SecurityProcessStatus.VALIDATED:
+            deadline = self.password_deadline(rules)
+            if deadline < midnight:
+                return deadline, SecurityProcessStatus.FAILED
+            return midnight, SecurityProcessStatus.INCOMPLETE
+        return min(
+            self._abandoned_at(rules), midnight
+        ), SecurityProcessStatus.INCOMPLETE
+
+    def _abandoned_at(self, rules: SecurityCodeRules) -> datetime:
+        """When nothing is left in force: the user's window, the active code and
+        support's grace, while support may still generate a code."""
+        limits = [self._window_end(rules)]
+        active = self._active()
+        if active is not None:
+            limits.append(active.expires_at)
+        grace_end = self._support_grace_end(rules)
+        if grace_end is not None:
+            limits.append(grace_end)
+        return max(limits)
+
+    def _support_grace_end(self, rules: SecurityCodeRules) -> datetime | None:
+        last = self._last_code()
+        if (
+            last is None
+            or last.status is SecurityCodeStatus.EXHAUSTED
+            or self.support_codes >= rules.max_support_codes
+        ):
+            return None
+        return last.expires_at + timedelta(minutes=rules.support_grace_minutes)
+
+    def _window_end(self, rules: SecurityCodeRules) -> datetime:
+        return self.started_at + timedelta(minutes=rules.user_window_minutes)
+
+    def _ensure_not_validated(self) -> None:
+        """A validated process only ends by setting the new password."""
+        if self.status is SecurityProcessStatus.VALIDATED:
+            raise DomainError(
+                SECURITY_CODE_ALREADY_VALIDATED,
+                code=DomainErrorCode.SECURITY_CODE_ALREADY_VALIDATED,
+            )
+
+    def _fail(self, now: datetime, reason: ProcessFailureReason) -> None:
+        self.status = SecurityProcessStatus.FAILED
+        self.finished_at = now
+        self.failure_reason = reason
+
     def _ensure_in_progress(self) -> None:
         if self.status is SecurityProcessStatus.FAILED:
             raise DomainError(PROCESS_FAILED, code=DomainErrorCode.PROCESS_FAILED)
@@ -197,8 +341,8 @@ class SecurityProcess:
     def _ensure_support_may_generate(
         self, now: datetime, rules: SecurityCodeRules
     ) -> None:
-        """A code whose attempts were spent reached the user, who is guessing; after
-        the grace period, support no longer helps in this process."""
+        """A code whose attempts were spent reached the user, who is guessing. The
+        grace period needs no check: once it ends, the process is closed."""
         last = self._last_code()
         if last is not None and last.status is SecurityCodeStatus.EXHAUSTED:
             raise DomainError(
@@ -207,11 +351,6 @@ class SecurityProcess:
         if self.support_codes >= rules.max_support_codes:
             raise DomainError(
                 SUPPORT_CODE_LIMIT, code=DomainErrorCode.SUPPORT_CODE_LIMIT
-            )
-        grace = timedelta(minutes=rules.support_grace_minutes)
-        if last is not None and now - last.expires_at >= grace:
-            raise DomainError(
-                GRACE_PERIOD_ENDED, code=DomainErrorCode.GRACE_PERIOD_ENDED
             )
 
     def _code_to_validate(self, now: datetime) -> SecurityCode:
@@ -233,9 +372,7 @@ class SecurityProcess:
         active.record_failed_attempt(rules.max_attempts)
         spent = active.status is SecurityCodeStatus.EXHAUSTED
         if spent and self.user_codes >= rules.max_user_codes:
-            self.status = SecurityProcessStatus.FAILED
-            self.finished_at = now
-            self.failure_reason = ProcessFailureReason.ATTEMPTS
+            self._fail(now, ProcessFailureReason.ATTEMPTS)
         raise DomainError(
             SECURITY_CODE_INCORRECT, code=DomainErrorCode.SECURITY_CODE_INCORRECT
         )
@@ -277,6 +414,12 @@ class SecurityProcess:
 
 def start_of_day(moment: datetime, zone: tzinfo) -> datetime:
     return _midnight(_day(moment, zone), zone)
+
+
+def start_of_week(moment: datetime, zone: tzinfo) -> datetime:
+    """Monday at 00:00 of the week of the moment."""
+    day = _day(moment, zone)
+    return _midnight(day - timedelta(days=day.weekday()), zone)
 
 
 def _midnight(day: date, zone: tzinfo) -> datetime:

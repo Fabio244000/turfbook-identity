@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, Select, delete, exists, select
+from sqlalchemy import ColumnElement, Select, delete, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.user_identity.domain.entities.security_process import (
@@ -65,18 +65,38 @@ class SecurityProcessRepository(SecurityProcessRepositoryPort):
         )
         return await self._get(query.with_for_update())
 
+    async def get_by_uuid(self, process_uuid: UUID) -> SecurityProcess | None:
+        query = select(SecurityProcessModel).where(
+            SecurityProcessModel.uuid == process_uuid
+        )
+        return await self._get(query)
+
     async def has_failed_since(
         self, user_uuid: UUID, type: SecurityProcessType, since: datetime
     ) -> bool:
-        query = select(
-            exists().where(
-                SecurityProcessModel.user_uuid == user_uuid,
-                SecurityProcessModel.type == type.value,
-                SecurityProcessModel.status == SecurityProcessStatus.FAILED.value,
-                SecurityProcessModel.finished_at >= since,
-            )
-        )
+        query = select(exists().where(*self._failed_since(user_uuid, type, since)))
         return bool((await self._session.execute(query)).scalar())
+
+    async def count_failed_since(
+        self, user_uuid: UUID, type: SecurityProcessType, since: datetime
+    ) -> int:
+        query = (
+            select(func.count())
+            .select_from(SecurityProcessModel)
+            .where(*self._failed_since(user_uuid, type, since))
+        )
+        return int((await self._session.execute(query)).scalar_one())
+
+    async def last_completed_at(
+        self, user_uuid: UUID, type: SecurityProcessType
+    ) -> datetime | None:
+        query = select(func.max(SecurityProcessModel.finished_at)).where(
+            SecurityProcessModel.user_uuid == user_uuid,
+            SecurityProcessModel.type == type.value,
+            SecurityProcessModel.status == SecurityProcessStatus.COMPLETED.value,
+        )
+        last: datetime | None = (await self._session.execute(query)).scalar_one()
+        return last
 
     async def delete(self, process_uuid: UUID) -> None:
         await self._delete_codes(SecurityCodeModel.process_uuid == process_uuid)
@@ -95,6 +115,16 @@ class SecurityProcessRepository(SecurityProcessRepositoryPort):
             delete(SecurityProcessModel).where(
                 SecurityProcessModel.user_uuid.in_(user_uuids)
             )
+        )
+
+    def _failed_since(
+        self, user_uuid: UUID, type: SecurityProcessType, since: datetime
+    ) -> tuple[ColumnElement[bool], ...]:
+        return (
+            SecurityProcessModel.user_uuid == user_uuid,
+            SecurityProcessModel.type == type.value,
+            SecurityProcessModel.status == SecurityProcessStatus.FAILED.value,
+            SecurityProcessModel.finished_at >= since,
         )
 
     async def _delete_codes(self, condition: ColumnElement[bool]) -> None:
@@ -121,6 +151,7 @@ class SecurityProcessRepository(SecurityProcessRepositoryPort):
             status=process.status.value,
             user_codes=process.user_codes,
             support_codes=process.support_codes,
+            password_attempts=process.password_attempts,
             started_at=process.started_at,
             validated_at=process.validated_at,
             finished_at=process.finished_at,
@@ -151,6 +182,7 @@ class SecurityProcessRepository(SecurityProcessRepositoryPort):
             status=SecurityProcessStatus(model.status),
             user_codes=model.user_codes,
             support_codes=model.support_codes,
+            password_attempts=model.password_attempts,
             started_at=model.started_at,
             validated_at=model.validated_at,
             finished_at=model.finished_at,

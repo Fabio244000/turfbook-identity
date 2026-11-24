@@ -4,7 +4,6 @@ import pytest
 
 from app.user_identity.application.exceptions import (
     EmailAlreadyVerifiedError,
-    GracePeriodEndedError,
     NoProcessInProgressError,
     SecurityCodeDeliveredError,
     SecurityCodeLimitError,
@@ -130,32 +129,6 @@ class TestGetSecurityCodeRejections:
             match='^The security code was delivered: it cannot be replaced.$',
         ):
             await driver.support_code(driver.cellphones[rosa])
-
-    async def test_rejects_a_code_after_the_grace_period(self) -> None:
-        driver = SecurityCodesDriver()
-        rosa = await driver.register('qarosa')
-        await driver.request_verification(rosa)
-        driver.later(minutes=5 + 60)
-
-        with pytest.raises(
-            GracePeriodEndedError,
-            match=(
-                '^The grace period has ended: support cannot generate a security code.$'
-            ),
-        ):
-            await driver.support_code(driver.cellphones[rosa])
-
-    async def test_after_the_grace_period_the_process_stays_open(self) -> None:
-        driver = SecurityCodesDriver()
-        rosa = await driver.register('qarosa')
-        process, _ = await driver.request_verification(rosa)
-        driver.later(minutes=5 + 60)
-        with pytest.raises(GracePeriodEndedError):
-            await driver.support_code(driver.cellphones[rosa])
-
-        again, _ = await driver.request_verification(rosa)
-
-        assert again == process
 
     async def test_rejects_a_cellphone_without_account(self) -> None:
         driver = SecurityCodesDriver()

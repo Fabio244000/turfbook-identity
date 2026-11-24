@@ -39,7 +39,8 @@ async def get_security_code(
     """TurfBook's support gets the security code of the user's process in progress,
     to help a user whose code did not arrive; the user is found by cellphone. With
     no code in force, it generates one (at most 2, within an hour of the last code)
-    that is never sent to the user. The only response that carries a code. Needs
+    that is never sent to the user; after that hour the process is closed. Not for a
+    process whose code the user already validated. The only response that carries a code. Needs
     TurfBook's API key in the X-Api-Key header."""
     code = await use_case.execute(request.cellphone, request.process_type.value)
     if code.generated:

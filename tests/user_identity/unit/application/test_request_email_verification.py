@@ -36,11 +36,11 @@ class TestRequestEmailVerification:
         assert notice['body'] == VERIFICATION_BODY
         assert expires_at == NOW + timedelta(minutes=5)
 
-    async def test_a_new_code_goes_on_in_the_process_of_the_day(self) -> None:
+    async def test_a_new_code_within_the_window_goes_on_in_the_process(self) -> None:
         driver = SecurityCodesDriver()
         rosa = await driver.register('qarosa')
         first, _ = await driver.request_verification(rosa)
-        driver.later(hours=5)
+        driver.later(minutes=30)
 
         second, _ = await driver.request_verification(rosa)
 
