@@ -1,0 +1,10 @@
+[
+  {"ParameterKey": "Service", "ParameterValue": "identity"},
+  {"ParameterKey": "Stage", "ParameterValue": "dev"},
+  {"ParameterKey": "GitHubOwner", "ParameterValue": "Fabio244000"},
+  {"ParameterKey": "HttpApi", "ParameterValue": "true"},
+  {"ParameterKey": "Vpc", "ParameterValue": "true"},
+  {"ParameterKey": "Messaging", "ParameterValue": "false"},
+  {"ParameterKey": "Scheduling", "ParameterValue": "true"},
+  {"ParameterKey": "RdsMaster", "ParameterValue": "false"}
+]

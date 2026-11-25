@@ -66,7 +66,7 @@ from app.user_identity.infrastructure.api.schemas.api_response import (
 
 logger = logging.getLogger(__name__)
 
-# Errors of the use cases written since 2026-11-09 (application errors).
+# What the use cases tell their callers (application errors).
 APPLICATION_STATUS_MAP: dict[type[ApplicationError], int] = {
     AccountNotFoundError: 404,
     AccountClosedError: 409,
@@ -98,7 +98,7 @@ APPLICATION_STATUS_MAP: dict[type[ApplicationError], int] = {
     InvalidNewPasswordError: 422,
 }
 
-# Errors of the use cases written before 2026-11-09 (domain errors), while they exist.
+# Domain errors that the use cases which do not translate them yet let through.
 STATUS_MAP: dict[type[DomainError], int] = {
     InvalidUserError: 422,
     MissingRequiredFieldsError: 422,

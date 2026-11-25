@@ -1,6 +1,6 @@
 import re
 
-# Data formats of the project (Ticket Manager's conventions/data.md): `[0-9]`, never `\d`.
+# Digits as `[0-9]`, never `\d`: in Python `\d` also matches the digits of other scripts.
 CELLPHONE_PATTERN = re.compile(r'^\+519[0-9]{8}$')
 CELLPHONE_LENGTH = 12
 EMAIL_PATTERN = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')

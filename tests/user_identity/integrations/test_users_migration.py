@@ -6,7 +6,7 @@ from alembic.config import Config
 from sqlalchemy import Engine, create_engine, text
 
 from alembic import command
-from app.migrations.handler import ALEMBIC_INIT_PATH
+from app.migrations.handler import ALEMBIC_INI_PATH
 from config.settings import settings
 
 # The revisions right before each migration of `users`.
@@ -52,7 +52,7 @@ def _delete_user(engine: Engine, user_uuid: UUID) -> None:
 def _stored_cellphone_after_upgrade(old_cellphone: str) -> str:
     """Inserts a user with the old format at the previous revision, upgrades to head
     and returns what is stored; the database always ends at head, without the user."""
-    config = Config(str(ALEMBIC_INIT_PATH))
+    config = Config(str(ALEMBIC_INI_PATH))
     engine = create_engine(settings.database_url)
     user_uuid = uuid4()
     command.downgrade(config, BEFORE_E164_CELLPHONES)
@@ -69,7 +69,7 @@ def _stored_cellphone_after_upgrade(old_cellphone: str) -> str:
 def _account_state_after_upgrade() -> tuple[Any, ...]:
     """Inserts a user at the revision before the account state, upgrades to head and
     returns its state; the database always ends at head, without the user."""
-    config = Config(str(ALEMBIC_INIT_PATH))
+    config = Config(str(ALEMBIC_INI_PATH))
     engine = create_engine(settings.database_url)
     user_uuid = uuid4()
     command.downgrade(config, BEFORE_ACCOUNT_STATE)
@@ -133,7 +133,7 @@ def _timestamps_across(
 ) -> tuple[Any, ...]:
     """Inserts a user at `from_revision`, migrates to `to_revision` and returns its
     timestamps; the database always ends at head, without the user."""
-    config = Config(str(ALEMBIC_INIT_PATH))
+    config = Config(str(ALEMBIC_INI_PATH))
     engine = create_engine(settings.database_url)
     user_uuid = uuid4()
     _go_to(config, from_revision)
@@ -151,7 +151,7 @@ def _email_verified_at_after_upgrade() -> Any:
     """Inserts a user at the revision before the email verification, upgrades to head
     and returns when its email was verified; the database always ends at head,
     without the user."""
-    config = Config(str(ALEMBIC_INIT_PATH))
+    config = Config(str(ALEMBIC_INI_PATH))
     engine = create_engine(settings.database_url)
     user_uuid = uuid4()
     _go_to(config, BEFORE_EMAIL_VERIFICATION)

@@ -8,7 +8,7 @@ from alembic.config import Config
 from sqlalchemy import Engine, create_engine, text
 
 from alembic import command
-from app.migrations.handler import ALEMBIC_INIT_PATH
+from app.migrations.handler import ALEMBIC_INI_PATH
 from config.settings import settings
 
 # The revision right before the password processes.
@@ -22,7 +22,7 @@ def engine() -> Iterator[Engine]:
     head, without the data the test wrote."""
     own_engine = create_engine(settings.database_url)
     yield own_engine
-    command.upgrade(Config(str(ALEMBIC_INIT_PATH)), 'head')
+    command.upgrade(Config(str(ALEMBIC_INI_PATH)), 'head')
     own_engine.dispose()
 
 
@@ -117,7 +117,7 @@ class TestPasswordProcessesMigration:
     def test_existing_processes_start_without_password_rejections(
         self, engine: Engine
     ) -> None:
-        config = Config(str(ALEMBIC_INIT_PATH))
+        config = Config(str(ALEMBIC_INI_PATH))
         user_uuid = uuid4()
         command.downgrade(config, BEFORE_PASSWORD_PROCESSES)
         try:
@@ -133,7 +133,7 @@ class TestPasswordProcessesMigration:
     def test_downgrading_keeps_the_processes_and_drops_the_new_events(
         self, engine: Engine
     ) -> None:
-        config = Config(str(ALEMBIC_INIT_PATH))
+        config = Config(str(ALEMBIC_INI_PATH))
         user_uuid = uuid4()
         command.upgrade(config, 'head')
         try:
