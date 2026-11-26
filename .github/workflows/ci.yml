@@ -23,7 +23,7 @@ jobs:
   # The jobs are shared; the service passes only its data: postgres-db, ci-env,
   # setup-script.
   ci:
-    uses: Fabio244000/turfbook-workflows/.github/workflows/python-ci.yml@f638114504f30844037a9b8d334a9393590bdec3 # main
+    uses: Fabio244000/turfbook-workflows/.github/workflows/python-ci.yml@b9077a3bb031a2fb2ca997e71c36669567e5a71b # main
     with:
       ref: ${{ inputs.ref }}
       postgres-db: identity
