@@ -1,12 +1,16 @@
 name: CI
 
+# Only on pull requests and inside deploy.yml: a push to a branch with an open pull
+# request would otherwise run it twice.
 on:
   pull_request:
     branches: [develop, main]
-  push:
-    # develop runs CI inside deploy.yml (workflow_call), not twice.
-    branches-ignore: [develop]
   workflow_call:
+    inputs:
+      ref:
+        description: Commit to test; empty for the commit of the event (a redeploy passes an earlier one).
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -16,58 +20,16 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  quality:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: turfbook
-          POSTGRES_PASSWORD: turfbook
-          POSTGRES_DB: identity
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      DATABASE_URL: postgresql+psycopg://turfbook:turfbook@localhost:5432/identity
-      # Settings requires it; tests never publish (fakes and a botocore Stubber).
-      NOTICES_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:turfbook-notifications-ci-notices
-      # Settings requires it; a test-only value, never a real key.
-      ACCOUNTS_API_KEY: ci-accounts-api-key
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: requirements/*.txt
-
-      - name: Install dependencies
-        run: pip install -r requirements/local.txt
-
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/pre-commit
-          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
-
-      - name: Pre-commit hooks
-        run: pre-commit run --all-files --show-diff-on-failure
-
-      # A throwaway key pair for this run only: Settings requires a signing key.
-      - name: Session token key (CI only)
-        run: |
-          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$RUNNER_TEMP/jwt.pem"
-          { echo 'JWT_PRIVATE_KEY<<EOF'; cat "$RUNNER_TEMP/jwt.pem"; echo 'EOF'; } >> "$GITHUB_ENV"
-
-      - name: Migrations
-        run: alembic upgrade head
-
-      - name: Tests
-        run: pytest
+  # The jobs are shared; the service passes only its data: postgres-db, ci-env,
+  # setup-script.
+  ci:
+    uses: Fabio244000/turfbook-workflows/.github/workflows/python-ci.yml@f638114504f30844037a9b8d334a9393590bdec3 # main
+    with:
+      ref: ${{ inputs.ref }}
+      postgres-db: identity
+      # Settings requires them; test-only values: tests never publish (fakes and a
+      # botocore Stubber) and the key is never a real one.
+      ci-env: |
+        NOTICES_TOPIC_ARN=arn:aws:sns:us-east-1:000000000000:turfbook-notifications-ci-notices
+        ACCOUNTS_API_KEY=ci-accounts-api-key
+      setup-script: scripts/ci/session_token_key.sh

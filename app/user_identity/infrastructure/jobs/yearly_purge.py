@@ -18,8 +18,8 @@ from app.user_identity.infrastructure.database.unit_of_work import (
 from app.user_identity.infrastructure.jobs.messages import YEARLY_PURGE_LOG
 
 logger = logging.getLogger(__name__)
-# One event loop per execution environment, reused on every invocation, as the
-# module-level engine requires (reference/queue.md).
+# One event loop per execution environment, reused on every invocation: the
+# module-level engine keeps connections bound to the loop that opened them.
 _runner = asyncio.Runner()
 
 

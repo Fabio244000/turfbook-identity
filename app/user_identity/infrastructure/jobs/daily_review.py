@@ -32,8 +32,8 @@ from app.user_identity.infrastructure.messaging.sns_notice_publisher import (
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
-# One event loop per execution environment, reused on every invocation, as the
-# module-level engine requires (reference/queue.md).
+# One event loop per execution environment, reused on every invocation: the
+# module-level engine keeps connections bound to the loop that opened them.
 _runner = asyncio.Runner()
 
 

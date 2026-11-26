@@ -8,8 +8,8 @@ from app.user_identity.application.exceptions import (
     AccountNotFoundError,
 )
 
-# Raised by use cases written before 2026-11-09 (sign in, renew): allowed while both
-# coexist (reference/testing.md, "Use case tests").
+# Raised by the sign-in and renew use cases, which do not translate their domain
+# errors yet.
 from app.user_identity.domain.exceptions import (
     AccountBlockedError,
     InvalidRefreshTokenError,

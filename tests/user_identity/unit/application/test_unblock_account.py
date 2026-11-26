@@ -9,8 +9,7 @@ from app.user_identity.application.exceptions import (
     AccountNotFoundError,
 )
 
-# Raised by a use case written before 2026-11-09 (sign in): allowed while both coexist
-# (reference/testing.md, "Use case tests").
+# Raised by the sign-in use case, which does not translate its domain errors yet.
 from app.user_identity.domain.exceptions import InvalidCredentialsError
 from tests.user_identity.unit.application.accounts_driver import (
     NOW,

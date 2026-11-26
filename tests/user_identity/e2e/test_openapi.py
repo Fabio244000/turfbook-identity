@@ -51,8 +51,8 @@ APPS: dict[str, tuple[FastAPI, str]] = {
 }
 
 # Every published operation (API, path, method), its request model (None without a
-# body), its success codes and model, every response code of its contract (the ticket's
-# §5) and its security, if any.
+# body), its success codes and model, every response code of its contract and its
+# security, if any.
 OPERATIONS: dict[tuple[str, str, str], dict[str, Any]] = {
     ('identity', '/api/v1/users', 'post'): {
         'request': UserRequest,
