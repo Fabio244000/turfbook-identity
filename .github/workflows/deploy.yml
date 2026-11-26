@@ -28,7 +28,7 @@ jobs:
     permissions:
       contents: read
       id-token: write # OIDC: assume the deploy role, no long-lived AWS keys
-    uses: Fabio244000/turfbook-workflows/.github/workflows/serverless-deploy.yml@f638114504f30844037a9b8d334a9393590bdec3 # main
+    uses: Fabio244000/turfbook-workflows/.github/workflows/serverless-deploy.yml@b9077a3bb031a2fb2ca997e71c36669567e5a71b # main
     with:
       stage: dev
       service: identity
